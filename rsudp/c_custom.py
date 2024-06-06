@@ -2,7 +2,7 @@ import sys, os
 from rsudp import printM, printW, printE
 from rsudp.raspberryshake import ConsumerThread
 from rsudp.test import TEST
-
+import traceback
 
 class Custom(ConsumerThread):
 	"""
@@ -90,13 +90,17 @@ class Custom(ConsumerThread):
 			# if the user has set a code file
 			printM('Executing code from file: %s' % self.codefile, sender=self.sender)
 			try:
-				# try to execute some code
-				exec(self.codefile)
+				# read the file content
+				with open(self.codefile, 'r') as file:
+					code = file.read()
+				# try to execute the code
+				exec(code, {'__name__': '__main__'})
 				if self.testing:
 					TEST['c_custom'][1] = True
 			except Exception as e:
 				# do something if it fails
 				printE('Code execution failed. Error: %s' % e, sender=self.sender, announce=False)
+				print(traceback.format_exc())
 		else:
 			printW('No code to run, codefile variable not set correctly.', sender=self.sender)
 

@@ -203,10 +203,10 @@ class RSAM(rs.ConsumerThread):
 		"""
 		if self.sock:
 			msg = 'stn:%s|ch:%s|mean:%s|med:%s|min:%s|max:%s' % (self.stn, self.cha, self.rsam[0], self.rsam[1], self.rsam[2], self.rsam[3])
-			if self.fwformat is 'JSON':
+			if self.fwformat == 'JSON':
 				msg = '{"station":"%s","channel":"%s","mean":%s,"median":%s,"min":%s,"max":%s}' \
 					  % (self.stn, self.cha, self.rsam[0], self.rsam[1], self.rsam[2], self.rsam[3])
-			elif self.fwformat is 'CSV':
+			elif self.fwformat == 'CSV':
 				msg = '%s,%s,%s,%s,%s,%s' \
 					  % (self.stn, self.cha, self.rsam[0], self.rsam[1], self.rsam[2], self.rsam[3])
 			packet = bytes(msg, 'utf-8')

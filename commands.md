@@ -6,3 +6,7 @@ rs-client -h
             dump the default settings to a JSON-formatted file
     -s | --settings=/path/to/settings/json
             specify the path to a JSON-formatted settings file
+
+rs-settings
+
+rs-client config.json
