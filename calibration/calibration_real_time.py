@@ -70,9 +70,10 @@ def fetch_and_process_data(station, starttime, duration, reference_station=None)
 
 def main():
     station = "RA9CD"
-    reference_station = "R448E" 
-    starttime = UTCDateTime.now() 
-    duration = 1000 
+    reference_station = "R448E"
+    starttime_str = "2024-06-07T19:00:00"
+    starttime = UTCDateTime(starttime_str)
+    duration = 7200 
     
     logging.info("Starting calibration process...")
     fetch_and_process_data(station, starttime, duration, reference_station)
