@@ -15,11 +15,12 @@ class RealTimeSeismograph:
         self.sock.bind((self.ip, self.port))
         logging.info(f"Listening for data on {self.ip}:{self.port}")
 
-        # Calculate K using reference values
+        # Calculate C using reference values
         reference_magnitude = 4.4
         reference_pgv = 0.004411  # m/s
-        self.K = reference_magnitude - np.log10(reference_pgv)
-        logging.info(f"Empirical constant K calculated: {self.K}")
+        #self.C = reference_magnitude - np.log10(reference_pgv)
+        self.C = 4.5
+        logging.info(f"Empirical constant C calculated: {self.C}")
 
     def process_data(self, data):
         try:
@@ -72,15 +73,11 @@ class RealTimeSeismograph:
             logging.debug(f"Velocity data: {velocity_data}")
 
             # Find Peak Ground Velocity (PGV)
-            pgv = max(abs(velocity_data))
+            pgv = max(abs(velocity_data/100000000))
             logging.debug(f"Peak Ground Velocity (PGV) calculated: {pgv}")
 
-            # Convert PGV from m/s to cm/s
-            pgv_cm_s = pgv * 100
-            logging.debug(f"PGV converted to cm/s: {pgv_cm_s}")
-
             # Estimate Richter magnitude using the empirical relationship
-            magnitude = np.log10(pgv_cm_s) + self.K
+            magnitude = np.log10(pgv) + self.C
             logging.info(f"Estimated Richter Magnitude: {magnitude}")
 
             # Trigger alert if magnitude exceeds threshold
@@ -102,7 +99,7 @@ class RealTimeSeismograph:
 if __name__ == "__main__":
     ip = "192.168.1.73"  # Computer's IP address
     port = 8888
-    threshold = 4.0
+    threshold = 0.0
 
     seismograph = RealTimeSeismograph(ip, port, threshold)
     seismograph.run()
