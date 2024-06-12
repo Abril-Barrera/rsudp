@@ -9,9 +9,9 @@ from obspy.clients.fdsn import Client
 from obspy import UTCDateTime
 import pandas as pd
 
-# Set up logging
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logging.getLogger('matplotlib').setLevel(logging.WARNING)  # Suppress matplotlib debug messages
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 class RealTimeSeismograph:
     def __init__(self, ip, port):
@@ -168,7 +168,7 @@ def fetch_and_process_data(station, duration, local_velocity_data):
 
 def main():
     station = "RA9CD"
-    duration = 500  # Duration in seconds (1 minute)
+    duration = 60 #seconds
     
     seismograph = RealTimeSeismograph("192.168.1.73", 8888)
 
