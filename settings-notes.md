@@ -129,3 +129,5 @@ Install with pip:
 
 Install with brew: 
 - freetype
+
+Appropiate velocity range: 0.000001 - 0.00000001

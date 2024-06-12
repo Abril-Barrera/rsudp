@@ -15,6 +15,12 @@ class RealTimeSeismograph:
         self.sock.bind((self.ip, self.port))
         logging.info(f"Listening for data on {self.ip}:{self.port}")
 
+        # Calculate K using reference values
+        reference_magnitude = 4.4
+        reference_pgv = 0.004411  # m/s
+        self.K = reference_magnitude - np.log10(reference_pgv)
+        logging.info(f"Empirical constant K calculated: {self.K}")
+
     def process_data(self, data):
         try:
             logging.debug(f"Received data of length: {len(data)} bytes")
@@ -54,7 +60,7 @@ class RealTimeSeismograph:
             logging.debug("Mean and linear trends removed")
 
             # Apply bandpass filter to isolate frequencies of interest
-            st.filter("bandpass", freqmin=0.1, freqmax=10.0)  # Adjusted max frequency to 10.0 Hz
+            st.filter("bandpass", freqmin=0.1, freqmax=10.0)
             logging.debug("Bandpass filter applied")
 
             # Integrate to convert displacement to velocity
@@ -74,7 +80,7 @@ class RealTimeSeismograph:
             logging.debug(f"PGV converted to cm/s: {pgv_cm_s}")
 
             # Estimate Richter magnitude using the empirical relationship
-            magnitude = np.log10(pgv_cm_s) + 2.0  # Adjusted the empirical relationship
+            magnitude = np.log10(pgv_cm_s) + self.K
             logging.info(f"Estimated Richter Magnitude: {magnitude}")
 
             # Trigger alert if magnitude exceeds threshold

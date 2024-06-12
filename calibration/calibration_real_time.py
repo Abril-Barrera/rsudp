@@ -1,109 +1,105 @@
-import numpy as np
+import socket
 import obspy
-from obspy.clients.fdsn import Client
-from obspy import UTCDateTime
+import numpy as np
 import logging
-import time
-import matplotlib.pyplot as plt
+import ast
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def adjust_baseline(trace):
-    baseline = np.mean(trace.data)
-    trace.data = trace.data - baseline
-    logging.debug(f"Adjusted baseline: {baseline}")
-    return trace
+class RealTimeSeismograph:
+    def __init__(self, ip, port, threshold):
+        self.ip = ip
+        self.port = port
+        self.threshold = threshold
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind((self.ip, self.port))
+        logging.info(f"Listening for data on {self.ip}:{self.port}")
 
-def fetch_and_process_data(station, starttime, duration, reference_station=None):
-    client = None
-    retries = 5
-    for attempt in range(retries):
+        # Calculate C using reference values
+        reference_magnitude = 4.4
+        reference_pgv = 0.004411  # m/s
+        #self.C = reference_magnitude - np.log10(reference_pgv)
+        self.C = 4.75
+        logging.info(f"Empirical constant C calculated: {self.C}")
+
+    def process_data(self, data):
         try:
-            client = Client("https://data.raspberryshake.org")
-            break
+            logging.debug(f"Received data of length: {len(data)} bytes")
+
+            data_str = data.decode('utf-8')
+            logging.debug(f"Decoded data string: {data_str}")
+
+            # Replace curly braces with square brackets to convert to a list format
+            data_str = data_str.replace('{', '[').replace('}', ']')
+            logging.debug(f"Modified data string for evaluation: {data_str}")
+
+            # Parse the data string
+            parsed_data = ast.literal_eval(data_str)
+            logging.debug(f"Parsed data: {parsed_data}")
+
+            channel = parsed_data[0]
+            timestamp = parsed_data[1]
+            seismic_readings = parsed_data[2:]
+
+            # Log the parsed components
+            logging.debug(f"Channel: {channel}")
+            logging.debug(f"Timestamp: {timestamp}")
+            logging.debug(f"Seismic readings: {seismic_readings}")
+
+            # Convert the seismic readings to a NumPy array
+            np_data = np.array(seismic_readings, dtype=np.int32)
+            logging.debug(f"Converted data to NumPy array with shape: {np_data.shape}")
+
+            # Create a Trace object from the NumPy array
+            trace = obspy.Trace(data=np_data)
+            st = obspy.Stream(traces=[trace])
+            logging.debug("Stream object created")
+
+            # Remove mean and linear trends
+            st.detrend("demean")
+            st.detrend("linear")
+            logging.debug("Mean and linear trends removed")
+
+            # Apply bandpass filter to isolate frequencies of interest
+            st.filter("bandpass", freqmin=0.1, freqmax=10.0)
+            logging.debug("Bandpass filter applied")
+
+            # Integrate to convert displacement to velocity
+            st.integrate()
+            logging.debug("Integrated to convert displacement to velocity")
+
+            # Log the velocity data
+            velocity_data = st[0].data
+            logging.debug(f"Velocity data: {velocity_data}")
+
+            # Find Peak Ground Velocity (PGV)
+            pgv = max(abs(velocity_data/10000000))
+            logging.debug(f"Peak Ground Velocity (PGV) calculated: {pgv}")
+
+            # Estimate Richter magnitude using the empirical relationship
+            magnitude = np.log10(pgv) + self.C
+            logging.info(f"Estimated Richter Magnitude: {magnitude}")
+
+            # Trigger alert if magnitude exceeds threshold
+            if magnitude >= self.threshold:
+                self.trigger_alert(magnitude)
         except Exception as e:
-            logging.error(f"Attempt {attempt + 1}/{retries} - Error connecting to FDSN service: {e}")
-            time.sleep(5)
-    if client is None:
-        logging.error("Failed to connect to FDSN service after multiple attempts.")
-        return
-    
-    # Fetch waveform data
-    endtime = starttime + duration
-    try:
-        st = client.get_waveforms(network="AM", station=station, location="00", channel="EHZ", starttime=starttime, endtime=endtime)
-    except Exception as e:
-        logging.error(f"No data available for request: {e}")
-        return
-    
-    # Fetch inventory (contains instrument response)
-    try:
-        inventory = client.get_stations(network="AM", station=station, level="response")
-    except Exception as e:
-        logging.error(f"Error fetching inventory: {e}")
-        return
-    
-    # Adjust baseline for each trace in the stream
-    st = st.copy()
-    for trace in st:
-        trace = adjust_baseline(trace)
-    
-    # Remove instrument response to get true ground motion velocity
-    st.remove_response(inventory=inventory, output="VEL")
-    
-    times = np.arange(0, duration, st[0].stats.delta)
-    velocities = st[0].data
+            logging.error(f"Error processing data: {e}")
 
-    # Compare with reference station if provided
-    if reference_station:
-        try:
-            ref_st = client.get_waveforms(network="AM", station=reference_station, location="00", channel="EHZ", starttime=starttime, endtime=endtime)
-            ref_inventory = client.get_stations(network="AM", station=reference_station, level="response")
-            ref_st.remove_response(inventory=ref_inventory, output="VEL")
-            
-            ref_times = np.arange(0, duration, ref_st[0].stats.delta)
-            ref_velocities = ref_st[0].data
+    def trigger_alert(self, magnitude):
+        logging.warning(f"Earthquake detected! Estimated Richter Magnitude: {magnitude}")
+        print(f"Earthquake detected! Estimated Richter Magnitude: {magnitude}")
 
-            # Trim arrays to the same length
-            min_length = min(len(times), len(ref_times), len(velocities), len(ref_velocities))
-            times = times[:min_length]
-            ref_times = ref_times[:min_length]
-            velocities = velocities[:min_length]
-            ref_velocities = ref_velocities[:min_length]
-
-            # Plot both streams for comparison
-            plt.figure(figsize=(12, 6))
-            plt.plot(times, velocities, label=f'Station {station}', color='blue')
-            plt.plot(ref_times, ref_velocities, label=f'Reference Station {reference_station}', color='green')
-            
-            # Calculate and plot the difference
-            differences = velocities - ref_velocities
-            min_diff = np.min(differences)
-            max_diff = np.max(differences)
-            
-            plt.fill_between(times, velocities, ref_velocities, color='gray', alpha=0.5)
-            plt.axhline(min_diff, color='red', linestyle='--', label=f'Min Diff: {min_diff:.6f}')
-            plt.axhline(max_diff, color='orange', linestyle='--', label=f'Max Diff: {max_diff:.6f}')
-            
-            plt.xlabel('Time (s)')
-            plt.ylabel('Velocity (m/s)')
-            plt.title('Velocity comparison between RA9CD-R448E stations during the 7th June earthquake')
-            plt.legend()
-            plt.show()
-            
-        except Exception as e:
-            logging.error(f"Error fetching data for reference station: {e}")
-
-def main():
-    station = "RA9CD"
-    reference_station = "R448E"
-    starttime_str = "2024-06-07T19:00:00"
-    starttime = UTCDateTime(starttime_str)
-    duration = 7200 
-    
-    logging.info("Starting calibration process...")
-    fetch_and_process_data(station, starttime, duration, reference_station)
-    logging.info("Calibration process completed.")
+    def run(self):
+        while True:
+            data, addr = self.sock.recvfrom(4096)  # Adjust buffer size as needed
+            logging.debug(f"Received data from {addr}: {data}")
+            self.process_data(data)
 
 if __name__ == "__main__":
-    main()
+    ip = "192.168.1.73"  # Computer's IP address
+    port = 8888
+    threshold = 0.0
+
+    seismograph = RealTimeSeismograph(ip, port, threshold)
+    seismograph.run()
