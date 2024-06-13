@@ -178,7 +178,7 @@ def main():
     start_time = UTCDateTime.now()
     current_time = time.time()
 
-    duration = 60 #seconds
+    duration = 0 #seconds
     
     seismograph = RealTimeSeismograph("192.168.1.73", 8888)
     logging.info(f"UTCDate: {start_time}")
