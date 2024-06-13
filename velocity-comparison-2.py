@@ -134,37 +134,36 @@ def fetch_and_process_data(station, duration, local_velocity_data, start_time):
     velocities = st[0].data
 
     # Trim arrays to the same length
-    min_length = min(len(times), len(velocities), len(local_velocity_data))
+    min_length = min(len(times), len(velocities))
     times = times[:min_length]
     velocities = velocities[:min_length]
-    local_velocity_data = np.array(local_velocity_data[:min_length])
+    #local_velocity_data = np.array(local_velocity_data[:min_length])
 
     # Calculate the correction factor
-    correction_factor = np.mean(velocities) / np.mean(local_velocity_data)
-    corrected_local_velocity_data = local_velocity_data * correction_factor
+    #correction_factor = np.mean(velocities) / np.mean(local_velocity_data)
+    #corrected_local_velocity_data = local_velocity_data * correction_factor
 
     # Log the correction factor and the formula
-    logging.info(f"Correction Factor: {correction_factor}")
-    logging.info(f"Formula: corrected_local_velocity = local_velocity * {correction_factor}")
+    #logging.info(f"Correction Factor: {correction_factor}")
+    #logging.info(f"Formula: corrected_local_velocity = local_velocity * {correction_factor}")
 
     # Prepare data for table
     data_comparison = {
         "Time (s)": times,
         "Server Velocity (m/s)": velocities,
-        "Local Velocity (m/s)": local_velocity_data,
-        "Corrected Local Velocity (m/s)": corrected_local_velocity_data,
+        #"Local Velocity (m/s)": local_velocity_data,
+        #"Corrected Local Velocity (m/s)": corrected_local_velocity_data,
     }
     
     # Convert to pandas DataFrame for better visualization
-    df = pd.DataFrame(data_comparison)
-    logging.info("\n" + df.to_string())  # Display the DataFrame in the logs
+    #df = pd.DataFrame(data_comparison)
+    #logging.info("\n" + df.to_string())  # Display the DataFrame in the logs
 
     # Plot both streams for comparison before and after correction
     plt.figure(figsize=(12, 6))
-    plt.plot(times, local_velocity_data, label='Local Velocity (Before Correction)', color='green')
     #plt.plot(times, corrected_local_velocity_data, label='Local Velocity (After Correction)', color='red')
     plt.plot(times, velocities, label='Server Velocity', color='blue')
-
+    #plt.plot(times, local_velocity_data, label='Local Velocity (Before Correction)', color='green')
     
 
     plt.xlabel('Time (s)')
@@ -175,17 +174,22 @@ def fetch_and_process_data(station, duration, local_velocity_data, start_time):
 
 def main():
     station = "RA9CD"
-    start_time = UTCDateTime.now()
+    #start_time = UTCDateTime.now()
+    startime = "2024-06-13T03:46:08.539054Z"
+    start_time = UTCDateTime(startime)
     current_time = time.time()
 
-    duration = 60 #seconds
+    duration = 300 #seconds
     
     seismograph = RealTimeSeismograph("192.168.1.73", 8888)
     logging.info(f"UTCDate: {start_time}")
     logging.info(f"Current timestamp: {current_time}")
 
+    #1718247660.018
+
+
     logging.info("Starting local data collection... ")
-    seismograph.run(duration)
+    #seismograph.run(duration)
 
     logging.info("Starting server data fetch and comparison...")
     fetch_and_process_data(station, duration, seismograph.local_velocity_data, start_time)
