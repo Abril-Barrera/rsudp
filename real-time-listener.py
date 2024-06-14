@@ -15,11 +15,8 @@ class RealTimeSeismograph:
         self.sock.bind((self.ip, self.port))
         logging.info(f"Listening for data on {self.ip}:{self.port}")
 
-        # Calculate C using reference values
-        reference_magnitude = 4.4
-        reference_pgv = 0.004411  # m/s
         #self.C = reference_magnitude - np.log10(reference_pgv)
-        self.C = 4.5
+        self.C = 2.9
         logging.info(f"Empirical constant C calculated: {self.C}")
 
     def process_data(self, data):

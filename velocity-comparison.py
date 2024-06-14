@@ -9,14 +9,14 @@ from obspy.clients.fdsn import Client
 from obspy import UTCDateTime
 import pandas as pd
 
-
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 class RealTimeSeismograph:
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, inventory_path):
         self.ip = ip
         self.port = port
+        self.inventory = obspy.read_inventory(inventory_path)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((self.ip, self.port))
         self.local_velocity_data = []
@@ -24,68 +24,48 @@ class RealTimeSeismograph:
 
     def process_data(self, data, counter):
         try:
-            #logging.debug(f"Received data of length: {len(data)} bytes")
-
             data_str = data.decode('utf-8')
-            #logging.debug(f"Decoded data string: {data_str}")
-
-            # Replace curly braces with square brackets to convert to a list format
             data_str = data_str.replace('{', '[').replace('}', ']')
-            #logging.debug(f"Modified data string for evaluation: {data_str}")
-
-            # Parse the data string
             parsed_data = ast.literal_eval(data_str)
-            #logging.debug(f"Parsed data: {parsed_data}")
 
-            sensor_timestamp = parsed_data
+            sensor_timestamp = parsed_data[1]
             if counter == 0:
                 logging.info(f"Sensor timestamp: {counter} + ' - ' + {sensor_timestamp}")
 
             seismic_readings = parsed_data[2:]
-
-            # Log the parsed seismic readings
-            #logging.debug(f"Seismic readings: {seismic_readings}")
-
-            # Convert the seismic readings to a NumPy array
             np_data = np.array(seismic_readings, dtype=np.int32)
-            #logging.debug(f"Converted data to NumPy array with shape: {np_data.shape}")
 
-            # Create a Trace object from the NumPy array
             trace = obspy.Trace(data=np_data)
-            st = obspy.Stream(traces=[trace])
-            #logging.debug("Stream object created")
+            trace.stats.network = 'AM'
+            trace.stats.station = 'RA9CD'
+            trace.stats.location = '00'
+            trace.stats.channel = 'EHZ'
+            trace.stats.starttime = obspy.UTCDateTime(sensor_timestamp)
 
-            # Remove mean and linear trends
+            st = obspy.Stream(traces=[trace])
+            st.attach_response(self.inventory)
+
             st.detrend("demean")
             st.detrend("linear")
-            #logging.debug("Mean and linear trends removed")
 
-            # Apply bandpass filter to isolate frequencies of interest
             st.filter("bandpass", freqmin=0.1, freqmax=10.0)
-            #logging.debug("Bandpass filter applied")
 
-            # Integrate to convert displacement to velocity
-            st.integrate()
-            #logging.debug("Integrated to convert displacement to velocity")
+            st.remove_response(output="VEL", pre_filt=[0.1, 0.2, 10.0, 20.0])
 
-            # Log the velocity data
             velocity_data = st[0].data
             self.local_velocity_data.extend(velocity_data.tolist())
-            #logging.debug(f"Velocity data: {velocity_data}")
-
         except Exception as e:
             logging.error(f"Error processing data: {e}")
 
     def run(self, period):
         start_time = time.time()
-        counter = 0 
-        while time.time() - start_time < period:  # Collect data for 1 minute
-            data, addr = self.sock.recvfrom(4096)  # Adjust buffer size as needed
-            #logging.debug(f"Received data from {addr}: {data}")
+        counter = 0
+        while time.time() - start_time < period:
+            data, addr = self.sock.recvfrom(4096)
             self.process_data(data, counter)
             elapsed_time = int(time.time() - start_time)
             logging.info(f"Seconds passed: {elapsed_time}")
-            counter = counter + 1
+            counter += 1
 
 def adjust_baseline(trace):
     baseline = np.mean(trace.data)
@@ -107,69 +87,49 @@ def fetch_and_process_data(station, duration, local_velocity_data, start_time):
         logging.error("Failed to connect to FDSN service after multiple attempts.")
         return
     
-    # Fetch waveform data
-    end_time= start_time + duration
+    end_time = start_time + duration
     try:
         st = client.get_waveforms(network="AM", station=station, location="00", channel="EHZ", starttime=start_time, endtime=end_time)
     except Exception as e:
         logging.error(f"No data available for request: {e}")
         return
     
-    # Fetch inventory (contains instrument response)
     try:
         inventory = client.get_stations(network="AM", station=station, level="response")
     except Exception as e:
         logging.error(f"Error fetching inventory: {e}")
         return
     
-    # Adjust baseline for each trace in the stream
     st = st.copy()
     for trace in st:
         trace = adjust_baseline(trace)
     
-    # Remove instrument response to get true ground motion velocity
     st.remove_response(inventory=inventory, output="VEL")
     
     times = np.arange(0, duration, st[0].stats.delta)
     velocities = st[0].data
 
-    # Trim arrays to the same length
     min_length = min(len(times), len(velocities), len(local_velocity_data))
     times = times[:min_length]
     velocities = velocities[:min_length]
     local_velocity_data = np.array(local_velocity_data[:min_length])
 
-    # Calculate the correction factor
-    correction_factor = np.mean(velocities) / np.mean(local_velocity_data)
-    corrected_local_velocity_data = local_velocity_data * correction_factor
-
-    # Log the correction factor and the formula
-    logging.info(f"Correction Factor: {correction_factor}")
-    logging.info(f"Formula: corrected_local_velocity = local_velocity * {correction_factor}")
-
-    # Prepare data for table
     data_comparison = {
         "Time (s)": times,
         "Server Velocity (m/s)": velocities,
-        "Local Velocity (m/s)": local_velocity_data,
-        "Corrected Local Velocity (m/s)": corrected_local_velocity_data,
+        "Local Velocity (m/s)": local_velocity_data
     }
     
-    # Convert to pandas DataFrame for better visualization
     df = pd.DataFrame(data_comparison)
-    logging.info("\n" + df.to_string())  # Display the DataFrame in the logs
+    logging.info("\n" + df.to_string())
 
-    # Plot both streams for comparison before and after correction
     plt.figure(figsize=(12, 6))
-    plt.plot(times, local_velocity_data, label='Local Velocity (Before Correction)', color='green')
-    #plt.plot(times, corrected_local_velocity_data, label='Local Velocity (After Correction)', color='red')
+    plt.plot(times, local_velocity_data, label='Local Velocity', color='green')
     plt.plot(times, velocities, label='Server Velocity', color='blue')
-
-    
 
     plt.xlabel('Time (s)')
     plt.ylabel('Velocity (m/s)')
-    plt.title('Velocity Comparison Between Server and Local (Before and After Correction)')
+    plt.title('Velocity Comparison Between Server and Local')
     plt.legend()
     plt.show()
 
@@ -178,9 +138,11 @@ def main():
     start_time = UTCDateTime.now()
     current_time = time.time()
 
-    duration = 0 #seconds
+    duration = 400  # Collect data for 60 seconds
     
-    seismograph = RealTimeSeismograph("192.168.1.73", 8888)
+    inventory_path = "inventory.xml"  # Path to your locally saved inventory file
+
+    seismograph = RealTimeSeismograph("192.168.1.73", 8888, inventory_path)
     logging.info(f"UTCDate: {start_time}")
     logging.info(f"Current timestamp: {current_time}")
 
