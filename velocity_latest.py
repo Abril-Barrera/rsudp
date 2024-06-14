@@ -71,7 +71,6 @@ class RealTimeSeismograph:
             data, addr = self.sock.recvfrom(4096)
             self.process_data(data, counter, period)
             elapsed_time = int(time.time() - start_time)
-            #logging.info(f"Seconds passed: {elapsed_time}")
             counter += 1
 
 def adjust_baseline(trace):
@@ -112,29 +111,32 @@ def fetch_and_process_data(station, duration, local_velocity_data, adjusted_star
     for trace in st:
         trace = adjust_baseline(trace)
     
-
     st.remove_response(inventory=inventory, output="VEL")
-    
-    times = np.arange(0, duration, st[0].stats.delta)
-    velocities = st[0].data
+    server_velocities = st[0].data
 
-    min_length = min(len(times), len(velocities), len(local_velocity_data))
+    times = np.arange(0, duration, st[0].stats.delta)
+    
+    min_length = min(len(times), len(server_velocities), len(local_velocity_data))
     times = times[:min_length]
-    velocities = velocities[:min_length]
+    server_velocities = server_velocities[:min_length]
     local_velocity_data = np.array(local_velocity_data[:min_length])
+
+    # Calculate correction factor
+    correction_factor = np.mean(np.abs(server_velocities)) / np.mean(np.abs(local_velocity_data))
+    local_velocity_data_corrected = local_velocity_data * correction_factor
 
     data_comparison = {
         "Time (s)": times,
-        "Server Velocity (m/s)": velocities,
-        "Local Velocity (m/s)": local_velocity_data
+        "Server Velocity (m/s)": server_velocities,
+        "Local Velocity (m/s)": local_velocity_data_corrected
     }
     
     df = pd.DataFrame(data_comparison)
     logging.info("\n" + df.to_string())
 
     plt.figure(figsize=(12, 6))
-    plt.plot(times, local_velocity_data, label='Local Velocity', color='green')
-    plt.plot(times, velocities, label='Server Velocity', color='blue')
+    plt.plot(times, local_velocity_data_corrected, label='Local Velocity', color='green')
+    plt.plot(times, server_velocities, label='Server Velocity', color='blue')
 
     plt.xlabel('Time (s)')
     plt.ylabel('Velocity (m/s)')
@@ -147,7 +149,7 @@ def main():
     start_time = UTCDateTime.now()
     current_time = time.time()
 
-    duration = 10  # Collect data for 60 seconds
+    duration = 60  # Collect data for seconds
     
     inventory_path = "inventory.xml"  # Path to your locally saved inventory file
 
