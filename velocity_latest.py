@@ -9,7 +9,7 @@ from obspy.clients.fdsn import Client
 from obspy import UTCDateTime
 import pandas as pd
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname=s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 class RealTimeSeismograph:
@@ -53,10 +53,10 @@ class RealTimeSeismograph:
             st.taper(max_percentage=0.05, type='hann')  # Add a taper to smooth the edges
 
             # Adjust bandpass filter parameters for low sampling rate
-            st.filter("bandpass", freqmin=0.1, freqmax=1.0, corners=4, zerophase=True)
+            st.filter("bandpass", freqmin=0.2, freqmax=2.0, corners=4, zerophase=True)
             
             # Fine-tune the pre-filter for response removal
-            pre_filt = [0.05, 0.1, 1.0, 1.5]
+            pre_filt = [0.1, 0.2, 2.0, 3.0]
             st.remove_response(output="VEL", pre_filt=pre_filt)
             velocity_data = st[0].data
             self.local_velocity_data.extend(velocity_data.tolist())
