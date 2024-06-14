@@ -48,12 +48,16 @@ class RealTimeSeismograph:
             st.attach_response(self.inventory)
             print(' LOCAL CLEAN STREAM', st)
 
+            # Improved filtering steps
             st.detrend("demean")
+            st.taper(max_percentage=0.05, type='hann')  # Add a taper to smooth the edges
 
-            st.filter("bandpass", freqmin=0.1, freqmax=10.0)
-
-            st.remove_response(output="VEL", pre_filt=[0.1, 0.2, 10.0, 20.0])
-
+            # Adjust bandpass filter parameters for low sampling rate
+            st.filter("bandpass", freqmin=0.1, freqmax=0.5, corners=4, zerophase=True)
+            
+            # Fine-tune the pre-filter for response removal
+            pre_filt = [0.1, 0.2, 0.4, 0.5]
+            st.remove_response(output="VEL", pre_filt=pre_filt)
             velocity_data = st[0].data
             self.local_velocity_data.extend(velocity_data.tolist())
 
@@ -143,7 +147,7 @@ def main():
     start_time = UTCDateTime.now()
     current_time = time.time()
 
-    duration = 1  # Collect data for 60 seconds
+    duration = 10  # Collect data for 60 seconds
     
     inventory_path = "inventory.xml"  # Path to your locally saved inventory file
 
