@@ -26,14 +26,18 @@ def process_data(sock, inventory, duration):
     local_velocity_data = []
     adjusted_start_time = None
 
+    first_record_logged = False
+
     while time.time() - start_time < duration:
         data, addr = sock.recvfrom(4096)
-        adjusted_start_time, local_raw_data, local_velocity_data = process_single_data(data, counter, inventory, adjusted_start_time, local_raw_data, local_velocity_data)
+        adjusted_start_time, local_raw_data, local_velocity_data = process_single_data(data, counter, inventory, adjusted_start_time, local_raw_data, local_velocity_data, first_record_logged)
+        if counter == 0:
+            first_record_logged = True
         counter += 1
 
     return local_raw_data, local_velocity_data, adjusted_start_time
 
-def process_single_data(data, counter, inventory, adjusted_start_time, local_raw_data, local_velocity_data):
+def process_single_data(data, counter, inventory, adjusted_start_time, local_raw_data, local_velocity_data, first_record_logged):
     try:
         data_str = data.decode('utf-8')
         data_str = data_str.replace('{', '[').replace('}', ']')
@@ -41,12 +45,15 @@ def process_single_data(data, counter, inventory, adjusted_start_time, local_raw
 
         sensor_timestamp = parsed_data[1]
         if counter == 0:
-            logging.info(f"Sensor timestamp: {counter} + ' - ' + {sensor_timestamp}")
+            logging.info(f"Sensor timestamp: {counter} - {sensor_timestamp}")
             adjusted_start_time = obspy.UTCDateTime(sensor_timestamp)
 
         seismic_readings = parsed_data[2:]
         np_data = np.array(seismic_readings, dtype=np.int32)
         local_raw_data.extend(np_data.tolist())
+
+        if not first_record_logged:
+            logging.info(f"Raw seismic readings (first 10): {np_data[:10]}")
 
         trace = obspy.Trace(data=np_data)
         trace.stats.network = 'AM'
@@ -54,31 +61,17 @@ def process_single_data(data, counter, inventory, adjusted_start_time, local_raw
         trace.stats.location = '00'
         trace.stats.channel = 'EHZ'
         trace.stats.starttime = obspy.UTCDateTime(sensor_timestamp)
-
         st = obspy.Stream(traces=[trace])
         st.attach_response(inventory)
+        st.remove_response(inventory=inventory, output="VEL")
+        local_velocity_data = st[0].data
 
-        st.detrend("demean")
-        st.taper(max_percentage=0.05, type='hann')
-
-        nyquist = 0.5 * st[0].stats.sampling_rate
-        freqmin = 0.1
-        freqmax = min(5.0, nyquist - 0.1)  # Ensure freqmax is below Nyquist
-
-        st.filter("bandpass", freqmin=freqmin, freqmax=freqmax, corners=4, zerophase=True)
-        
-        pre_filt = [0.1, 0.2, freqmax, nyquist]
-        st.remove_response(output="VEL", pre_filt=pre_filt)
-        velocity_data = st[0].data
-
-        if velocity_data.size > 0:
-            local_velocity_data.extend(velocity_data.tolist())
-        else:
-            logging.warning("Processed local velocity data is empty.")
+        if not first_record_logged:
+            logging.info(f"Local velocity data (first 10): {local_velocity_data[:10]}")
 
     except Exception as e:
         logging.error(f"Error processing data: {e}")
-
+        
     return adjusted_start_time, local_raw_data, local_velocity_data
 
 def get_local_data(sock, duration):
@@ -92,24 +85,26 @@ def get_server_data(station, duration, local_raw_data, adjusted_start_time, inve
     st.attach_response(inventory)
     server_raw_data = st[0].data
 
+    logging.info(f"Server raw data (first 10): {server_raw_data[:10]}")
+    
     st.remove_response(inventory=inventory, output="VEL")
     server_velocity_data = st[0].data
+
+    logging.info(f"Server velocity data (first 10): {server_velocity_data[:10]}")
 
     times = np.arange(0, duration, st[0].stats.delta)
 
     return server_raw_data, server_velocity_data, st, times
 
 def get_data_statistics(times, server_raw_data, local_raw_data, server_velocity_data, local_velocity_data):
-    min_length = min(len(times), len(server_raw_data), len(local_velocity_data), len(local_raw_data))
+    min_length = min(len(times), len(server_raw_data), len(local_raw_data), len(server_velocity_data), len(local_velocity_data))
     times = times[:min_length]
     server_raw_data = server_raw_data[:min_length]
     local_raw_data = np.array(local_raw_data[:min_length])
+    server_velocity_data = server_velocity_data[:min_length]
     local_velocity_data = np.array(local_velocity_data[:min_length])
 
-    correction_factor = np.mean(np.abs(server_velocity_data)) / np.mean(np.abs(local_velocity_data))
-    local_velocity_data_corrected = local_velocity_data * correction_factor
-
-    return times, server_raw_data, local_raw_data, server_velocity_data, local_velocity_data_corrected
+    return times, server_raw_data, local_raw_data, server_velocity_data, local_velocity_data
 
 def plot_velocity_data(times, local_velocity_data, server_velocity_data):
     plt.figure(figsize=(12, 6))
@@ -142,7 +137,7 @@ def calculate_similarity(data1, data2):
 def main():
     logging.info("----------------- Process started ----------------- ")
     station = "RECF8"
-    duration = 60
+    duration = 10
     start_time = UTCDateTime.now()
     current_time = time.time()
     inventory_path = "inventory.xml"
@@ -162,15 +157,15 @@ def main():
     server_raw_data, server_velocity_data, st_server, times = get_server_data(station, duration, local_raw_data, adjusted_start_time, inventory, client)
 
     logging.info("----------------- Calculating data statistics ----------------- ")
-    times, server_raw_data, local_raw_data, server_velocity_data, local_velocity_data_corrected = get_data_statistics(times, server_raw_data, local_raw_data, server_velocity_data, local_velocity_data)
+    times, server_raw_data, local_raw_data, server_velocity_data, local_velocity_data = get_data_statistics(times, server_raw_data, local_raw_data, server_velocity_data, local_velocity_data)
 
-    plot_velocity_data(times, local_velocity_data_corrected, server_velocity_data)
+    plot_velocity_data(times, local_velocity_data, server_velocity_data)
     plot_raw_data(times, server_raw_data, local_raw_data)
 
     similarity_raw = calculate_similarity(server_raw_data, local_raw_data)
     logging.info(f"Similarity between server raw data and local raw data: {similarity_raw:.2f}%")
 
-    similarity_velocity = calculate_similarity(server_velocity_data, local_velocity_data_corrected)
+    similarity_velocity = calculate_similarity(server_velocity_data, local_velocity_data)
     logging.info(f"Similarity between server velocity data and local velocity data: {similarity_velocity:.2f}%")
 
     logging.info("----------------- Process completed ----------------- ")
