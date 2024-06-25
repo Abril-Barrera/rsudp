@@ -107,9 +107,9 @@ def get_data_statistics(times, server_raw_data, local_raw_data, server_velocity_
     local_velocity_data = np.array(local_velocity_data[:min_length])
 
     correction_factor = np.mean(np.abs(server_velocity_data)) / np.mean(np.abs(local_velocity_data))
-    server_velocity_data_corrected = local_velocity_data * correction_factor
+    local_velocity_data_corrected = local_velocity_data * correction_factor
 
-    return times, server_raw_data, local_raw_data, server_velocity_data_corrected, local_velocity_data
+    return times, server_raw_data, local_raw_data, server_velocity_data, local_velocity_data_corrected
 
 def plot_velocity_data(times, local_velocity_data, server_velocity_data):
     plt.figure(figsize=(12, 6))
@@ -131,10 +131,18 @@ def plot_raw_data(times, server_raw_data, local_raw_data):
     plt.legend()
     plt.show()
 
+def calculate_similarity(data1, data2):
+    if len(data1) == 0 or len(data2) == 0:
+        return 0.0
+    data1 = data1.reshape(1, -1)
+    data2 = data2.reshape(1, -1)
+    similarity = cosine_similarity(data1, data2)
+    return similarity[0][0] * 100
+
 def main():
     logging.info("----------------- Process started ----------------- ")
     station = "RECF8"
-    duration = 10
+    duration = 60
     start_time = UTCDateTime.now()
     current_time = time.time()
     inventory_path = "inventory.xml"
@@ -154,10 +162,16 @@ def main():
     server_raw_data, server_velocity_data, st_server, times = get_server_data(station, duration, local_raw_data, adjusted_start_time, inventory, client)
 
     logging.info("----------------- Calculating data statistics ----------------- ")
-    times, server_raw_data, local_raw_data, server_velocity_data, local_velocity_data = get_data_statistics(times, server_raw_data, local_raw_data, server_velocity_data, local_velocity_data)
+    times, server_raw_data, local_raw_data, server_velocity_data, local_velocity_data_corrected = get_data_statistics(times, server_raw_data, local_raw_data, server_velocity_data, local_velocity_data)
 
-    plot_velocity_data(times, local_velocity_data, server_velocity_data)
+    plot_velocity_data(times, local_velocity_data_corrected, server_velocity_data)
     plot_raw_data(times, server_raw_data, local_raw_data)
+
+    similarity_raw = calculate_similarity(server_raw_data, local_raw_data)
+    logging.info(f"Similarity between server raw data and local raw data: {similarity_raw:.2f}%")
+
+    similarity_velocity = calculate_similarity(server_velocity_data, local_velocity_data_corrected)
+    logging.info(f"Similarity between server velocity data and local velocity data: {similarity_velocity:.2f}%")
 
     logging.info("----------------- Process completed ----------------- ")
 
