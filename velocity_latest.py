@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from obspy.clients.fdsn import Client
 from obspy import UTCDateTime
 import pandas as pd
+from sklearn.metrics.pairwise import cosine_similarity
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
@@ -20,6 +21,7 @@ class RealTimeSeismograph:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((self.ip, self.port))
         self.local_velocity_data = []
+        self.local_raw_data = []
         self.adjusted_start_time = None
         logging.info(f"Listening for data on {self.ip}:{self.port}")
 
@@ -37,29 +39,35 @@ class RealTimeSeismograph:
             seismic_readings = parsed_data[2:]
             np_data = np.array(seismic_readings, dtype=np.int32)
 
+            self.local_raw_data.extend(np_data.tolist())
+
             trace = obspy.Trace(data=np_data)
             trace.stats.network = 'AM'
-            trace.stats.station = 'RA9CD'
+            trace.stats.station = 'RECF8'
             trace.stats.location = '00'
             trace.stats.channel = 'EHZ'
             trace.stats.starttime = obspy.UTCDateTime(sensor_timestamp)
 
             st = obspy.Stream(traces=[trace])
             st.attach_response(self.inventory)
-            print(' LOCAL CLEAN STREAM', st)
 
-            # Improved filtering steps
             st.detrend("demean")
-            st.taper(max_percentage=0.05, type='hann')  # Add a taper to smooth the edges
+            st.taper(max_percentage=0.05, type='hann')
 
-            # Adjust bandpass filter parameters for low sampling rate
-            st.filter("bandpass", freqmin=0.1, freqmax=5.0, corners=4, zerophase=True)
+            nyquist = 0.5 * st[0].stats.sampling_rate
+            freqmin = 0.1
+            freqmax = min(5.0, nyquist - 0.1)  # Ensure freqmax is below Nyquist
+
+            st.filter("bandpass", freqmin=freqmin, freqmax=freqmax, corners=4, zerophase=True)
             
-            # Fine-tune the pre-filter for response removal
-            pre_filt = [0.05, 0.1, 5.0, 10.0]
+            pre_filt = [0.1, 0.2, freqmax, nyquist]
             st.remove_response(output="VEL", pre_filt=pre_filt)
             velocity_data = st[0].data
-            self.local_velocity_data.extend(velocity_data.tolist())
+
+            if velocity_data.size > 0:
+                self.local_velocity_data.extend(velocity_data.tolist())
+            else:
+                logging.warning("Processed local velocity data is empty.")
 
         except Exception as e:
             logging.error(f"Error processing data: {e}")
@@ -79,7 +87,15 @@ def adjust_baseline(trace):
     logging.debug(f"Adjusted baseline: {baseline}")
     return trace
 
-def fetch_and_process_data(station, duration, local_velocity_data, adjusted_start_time):
+def calculate_similarity(data1, data2):
+    if len(data1) == 0 or len(data2) == 0:
+        return 0.0
+    data1 = data1.reshape(1, -1)
+    data2 = data2.reshape(1, -1)
+    similarity = cosine_similarity(data1, data2)
+    return similarity[0][0] * 100
+
+def fetch_and_process_data(station, duration, local_velocity_data, local_raw_data, adjusted_start_time):
     client = None
     retries = 5
     for attempt in range(retries):
@@ -107,7 +123,6 @@ def fetch_and_process_data(station, duration, local_velocity_data, adjusted_star
         return
     
     st = st.copy()
-    print(' SERVER CLEAN STREAM ', st)
     for trace in st:
         trace = adjust_baseline(trace)
     
@@ -116,27 +131,31 @@ def fetch_and_process_data(station, duration, local_velocity_data, adjusted_star
 
     times = np.arange(0, duration, st[0].stats.delta)
     
-    min_length = min(len(times), len(server_velocities), len(local_velocity_data))
+    min_length = min(len(times), len(server_velocities), len(local_velocity_data), len(local_raw_data))
     times = times[:min_length]
     server_velocities = server_velocities[:min_length]
     local_velocity_data = np.array(local_velocity_data[:min_length])
+    local_raw_data = np.array(local_raw_data[:min_length])
 
-    # Calculate correction factor
+    if local_velocity_data.size == 0 or server_velocities.size == 0:
+        logging.error("Local or server velocity data is empty after processing.")
+        return
+
     correction_factor = np.mean(np.abs(server_velocities)) / np.mean(np.abs(local_velocity_data))
     local_velocity_data_corrected = local_velocity_data * correction_factor
 
-    data_comparison = {
+    data_comparison_velocity = {
         "Time (s)": times,
         "Server Velocity (m/s)": server_velocities,
         "Local Velocity (m/s)": local_velocity_data_corrected
     }
     
-    df = pd.DataFrame(data_comparison)
-    logging.info("\n" + df.to_string())
+    df_velocity = pd.DataFrame(data_comparison_velocity)
+    logging.info("\n" + df_velocity.to_string())
 
     plt.figure(figsize=(12, 6))
-    plt.plot(times, local_velocity_data_corrected, label='Local Velocity', color='green')
-    plt.plot(times, server_velocities, label='Server Velocity', color='blue')
+    plt.plot(times, local_velocity_data_corrected, label='Local Velocity', color='green', alpha=0.7)
+    plt.plot(times, server_velocities, label='Server Velocity', color='blue', alpha=0.7)
 
     plt.xlabel('Time (s)')
     plt.ylabel('Velocity (m/s)')
@@ -144,8 +163,42 @@ def fetch_and_process_data(station, duration, local_velocity_data, adjusted_star
     plt.legend()
     plt.show()
 
+    if local_raw_data.size == 0:
+        logging.error("Local raw data is empty after processing.")
+        return
+
+    try:
+        st_raw = client.get_waveforms(network="AM", station=station, location="00", channel="EHZ", starttime=adjusted_start_time, endtime=end_time)
+        server_raw_data = st_raw[0].data
+        server_raw_data = server_raw_data[:min_length]
+    except Exception as e:
+        logging.error(f"No data available for request: {e}")
+        return
+
+    similarity_raw = calculate_similarity(server_raw_data, local_raw_data)
+
+    logging.info(f"Similarity between server raw data and local raw data: {similarity_raw:.2f}%")
+
+    data_comparison_raw = {
+        "Time (s)": times,
+        "Server Raw Data": server_raw_data,
+        "Local Raw Data": local_raw_data
+    }
+
+    df_raw = pd.DataFrame(data_comparison_raw)
+    logging.info("\n" + df_raw.to_string())
+
+    plt.figure(figsize=(12, 6))
+    plt.plot(times, server_raw_data, label='Server Raw Data', color='red', linestyle='-', linewidth=1.5, marker='o', markersize=2)
+    plt.plot(times, local_raw_data, label='Local Raw Data', color='blue', linestyle='--', linewidth=1.5, marker='x', markersize=2)
+    plt.xlabel('Time (s)')
+    plt.ylabel('Raw Data')
+    plt.title('Raw Data Comparison Between Server and Local')
+    plt.legend()
+    plt.show()
+
 def main():
-    station = "RA9CD"
+    station = "RECF8"
     start_time = UTCDateTime.now()
     current_time = time.time()
 
@@ -164,7 +217,7 @@ def main():
     logging.info(f"Adjusted start time: {adjusted_start_time}")
 
     logging.info("Starting server data fetch and comparison...")
-    fetch_and_process_data(station, duration, seismograph.local_velocity_data, adjusted_start_time)
+    fetch_and_process_data(station, duration, seismograph.local_velocity_data, seismograph.local_raw_data, adjusted_start_time)
     logging.info("Data comparison process completed.")
 
 if __name__ == "__main__":

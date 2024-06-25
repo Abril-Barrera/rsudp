@@ -5,10 +5,10 @@ from obspy.clients.fdsn import Client as FDSNClient
 # Configuration for your Raspberry Shake and local machine
 RS_SERVER = "http://data.raspberryshake.org"
 NETWORK = "AM"
-STATION = "RA9CD"  # Replace with your station code
+STATION = "RECF8"  # Replace with your station code
 USERNAME = "myshake"  # Default username for Raspberry Shake
 PASSWORD = "shakeme"  # Default password for Raspberry Shake
-SHAKE_IP = "192.168.1.185"  # IP address of your Raspberry Shake
+SHAKE_IP = "192.168.1.94"  # IP address of your Raspberry Shake
 SSH_PORT = 22  # Default SSH port
 REMOTE_PATH = "/opt/settings/config/inventory.xml"  # Path to upload the inventory file on the Raspberry Shake
 LOCAL_PATH = "inventory.xml"  # Path to save the inventory file locally

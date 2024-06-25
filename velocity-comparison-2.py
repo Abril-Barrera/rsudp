@@ -93,7 +93,7 @@ def adjust_baseline(trace):
     logging.debug(f"Adjusted baseline: {baseline}")
     return trace
 
-def fetch_and_process_data(station, duration, local_velocity_data, start_time):
+def fetch_and_process_data(station, duration, start_time):
     client = None
     retries = 5
     for attempt in range(retries):
@@ -179,9 +179,9 @@ def main():
     start_time = UTCDateTime(startime)
     current_time = time.time()
 
-    duration = 300 #seconds
+    duration = 60 #seconds
     
-    seismograph = RealTimeSeismograph("192.168.1.73", 8888)
+    #seismograph = RealTimeSeismograph("192.168.1.73", 8888)
     logging.info(f"UTCDate: {start_time}")
     logging.info(f"Current timestamp: {current_time}")
 
@@ -192,7 +192,7 @@ def main():
     #seismograph.run(duration)
 
     logging.info("Starting server data fetch and comparison...")
-    fetch_and_process_data(station, duration, seismograph.local_velocity_data, start_time)
+    fetch_and_process_data(station, duration, start_time)
     logging.info("Data comparison process completed.")
 
 if __name__ == "__main__":
