@@ -1,0 +1,40 @@
+2024-06-25 15:40:44,602 - INFO - Local Trace Attributes:          network: AM
+         station: RECF8
+        location: 00
+         channel: EHZ
+       starttime: 2024-06-25T21:40:42.286000Z
+         endtime: 2024-06-25T21:40:42.526000Z
+   sampling_rate: 100.0
+           delta: 0.01
+            npts: 25
+           calib: 1.0
+      processing: ["ObsPy 1.4.1: remove_response(fig=None::inventory=<obspy.core.inventory.inventory.Inventory object at 0x0000015A638DF8E0>::output='VEL'::plot=False::pre_filt=[0.01, 0.02, 20.0, 50.0]::taper=True::taper_fraction=0.05::water_level=60::zero_mean=True)"]
+        response: Channel Response
+        From M/S (Velocity in Meters Per Second) to COUNTS (None)
+        Overall Sensitivity: 3.9965e+08 defined at 5.000 Hz
+        3 stages:
+                Stage 1: PolesZerosResponseStage from M/S to V, gain: 3.9965e+08
+                Stage 2: CoefficientsTypeResponseStage from V to COUNTS, gain: 1
+                Stage 3: FIRResponseStage from COUNTS to COUNTS, gain: 1
+
+2024-06-25 15:41:15,569 - INFO - Server Trace Attributes:                network: AM
+               station: RECF8
+              location: 00
+               channel: EHZ
+             starttime: 2024-06-25T21:40:42.286000Z
+               endtime: 2024-06-25T21:41:12.106000Z
+         sampling_rate: 100.0
+                 delta: 0.01
+                  npts: 2983
+                 calib: 1.0
+_fdsnws_dataselect_url: https://data.raspberryshake.org/fdsnws/dataselect/1/query
+               _format: MSEED
+                 mseed: AttribDict({'dataquality': 'D', 'number_of_records': 15, 'encoding': 'STEIM2', 'byteorder': '>', 'record_length': 512, 'filesize': 7680})        
+            processing: ['ObsPy 1.4.1: trim(endtime=UTCDateTime(2024, 6, 25, 21, 41, 12, 286000)::fill_value=None::nearest_sample=True::pad=False::starttime=UTCDateTime(2024, 6, 25, 21, 40, 42, 286000))', "ObsPy 1.4.1: remove_response(fig=None::inventory=<obspy.core.inventory.inventory.Inventory object at 0x0000015A638E2D60>::output='VEL'::plot=False::pre_filt=[0.01, 0.02, 20.0, 50.0]::taper=True::taper_fraction=0.05::water_level=60::zero_mean=True)"]
+              response: Channel Response
+        From M/S (Velocity in Meters Per Second) to COUNTS (None)
+        Overall Sensitivity: 3.9965e+08 defined at 5.000 Hz
+        3 stages:
+                Stage 1: PolesZerosResponseStage from M/S to V, gain: 3.9965e+08
+                Stage 2: CoefficientsTypeResponseStage from V to COUNTS, gain: 1
+                Stage 3: FIRResponseStage from COUNTS to COUNTS, gain: 1
