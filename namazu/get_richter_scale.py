@@ -6,7 +6,7 @@ import ast
 import matplotlib.pyplot as plt
 from obspy import UTCDateTime
 from collections import deque
-import winsound
+import pygame
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
@@ -63,16 +63,18 @@ def estimate_magnitude(pgv, b_value):
     magnitude = np.log10(pgv_cm_s) + b_value
     return magnitude
 
-def trigger_alert(magnitude, threshold, duration, freq):
+def trigger_alert(magnitude, threshold, alert_sound_path):
     if magnitude >= threshold:
         logging.warning(f"Alert! Estimated Magnitude: {magnitude:.2f}")
-        winsound.Beep(freq, duration)
+        pygame.mixer.music.load(alert_sound_path)
+        pygame.mixer.music.play()
 
-def process_data_realtime(sock, inventory, buffer_size, b_value, threshold, duration, freq):
+def process_data_realtime(sock, inventory, buffer_size, b_value, threshold, alert_sound_path):
     buffer = deque(maxlen=buffer_size)
     magnitudes = deque(maxlen=buffer_size)
     times = deque(maxlen=buffer_size)
     start_time = UTCDateTime.now()
+    pygame.init()
 
     while True:
         seismic_readings = read_data(sock)
@@ -80,7 +82,7 @@ def process_data_realtime(sock, inventory, buffer_size, b_value, threshold, dura
         trace = create_and_process_trace(buffer, inventory, start_time)
         pgv = calculate_pgv(trace.data)
         magnitude = estimate_magnitude(pgv, b_value)
-        trigger_alert(magnitude, threshold, duration, freq)
+        trigger_alert(magnitude, threshold, alert_sound_path)
         current_time = UTCDateTime.now()
         times.append(current_time - start_time)
         magnitudes.append(magnitude)
@@ -94,14 +96,13 @@ def main():
     buffer_size_ms = 3000
     richter_b = 3.0
     richter_threshold = 4.0
-    alert_duration_ms = 5000
-    alert_freq_hz = 500
-    
+    alert_sound_path = "namazu/alerta_cdmx.mp3"
+
     inventory_file = obspy.read_inventory(inventory_path)
     socket = initialize_socket(pc_ip, pc_port)
 
     logging.info("----------------- Starting real-time data processing -----------------")
-    process_data_realtime(socket, inventory_file, buffer_size_ms, richter_b, richter_threshold, alert_duration_ms, alert_freq_hz)
+    process_data_realtime(socket, inventory_file, buffer_size_ms, richter_b, richter_threshold, alert_sound_path)
 
 if __name__ == "__main__":
     main()
