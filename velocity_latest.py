@@ -161,7 +161,7 @@ def main():
     logging.info("----------------- Process started ----------------- ")
     logging.info("----------------- Current configuration ----------------- ")
     station = "RECF8"
-    duration = 5
+    duration = 20
     start_time = UTCDateTime.now()
     inventory_path = "inventory.xml"
     ip = "192.168.1.73"
