@@ -64,7 +64,7 @@ def estimate_magnitude(pgv, b_value):
     return magnitude
 
 def trigger_alert(magnitude, threshold, alert_sound_path):
-    if magnitude >= threshold:
+    if magnitude >= threshold and not pygame.mixer.music.get_busy():
         logging.warning(f"Alert! Estimated Magnitude: {magnitude:.2f}")
         pygame.mixer.music.load(alert_sound_path)
         pygame.mixer.music.play()
