@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from obspy import UTCDateTime
 from collections import deque
 import pygame
+import os
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
@@ -69,24 +70,96 @@ def trigger_alert(magnitude, threshold, alert_sound_path):
         pygame.mixer.music.load(alert_sound_path)
         pygame.mixer.music.play()
 
+def save_to_file(data, filename):
+    with open(filename, 'w') as file:
+        file.write("Timestamp, Velocity, Richter Scale\n")
+        for row in data:
+            file.write(f"{row[0]}, {row[1]}, {row[2]}\n")
+        magnitudes = [row[2] for row in data]
+        file.write(f"MIN Richter Scale: {min(magnitudes):.2f}\n")
+        file.write(f"MAX Richter Scale: {max(magnitudes):.2f}\n")
+
 def process_data_realtime(sock, inventory, buffer_size, b_value, threshold, alert_sound_path):
     buffer = deque(maxlen=buffer_size)
     magnitudes = deque(maxlen=buffer_size)
     times = deque(maxlen=buffer_size)
     start_time = UTCDateTime.now()
     pygame.init()
+    data_to_save = []
+    filename = None
 
     while True:
-        seismic_readings = read_data(sock)
-        update_buffer(buffer, seismic_readings)
-        trace = create_and_process_trace(buffer, inventory, start_time)
-        pgv = calculate_pgv(trace.data)
-        magnitude = estimate_magnitude(pgv, b_value)
-        trigger_alert(magnitude, threshold, alert_sound_path)
-        current_time = UTCDateTime.now()
-        times.append(current_time - start_time)
-        magnitudes.append(magnitude)
-        plot_magnitudes(times, magnitudes)
+        try:
+            try:
+                seismic_readings = read_data(sock)
+            except Exception as e:
+                logging.error(f"Error reading data: {e}")
+                continue
+            
+            try:
+                update_buffer(buffer, seismic_readings)
+            except Exception as e:
+                logging.error(f"Error updating buffer: {e}")
+                continue
+            
+            try:
+                trace = create_and_process_trace(buffer, inventory, start_time)
+            except Exception as e:
+                logging.error(f"Error creating and processing trace: {e}")
+                continue
+            
+            try:
+                pgv = calculate_pgv(trace.data)
+            except Exception as e:
+                logging.error(f"Error calculating PGV: {e}")
+                continue
+            
+            try:
+                magnitude = estimate_magnitude(pgv, b_value)
+            except Exception as e:
+                logging.error(f"Error estimating magnitude: {e}")
+                continue
+            
+            try:
+                trigger_alert(magnitude, threshold, alert_sound_path)
+            except Exception as e:
+                logging.error(f"Error triggering alert: {e}")
+                continue
+            
+            try:
+                current_time = UTCDateTime.now()
+            except Exception as e:
+                logging.error(f"Error getting current time: {e}")
+                continue
+
+            try:
+                if magnitude >= threshold:
+                    if not filename:
+                        filename = f"{current_time.isoformat().replace(':', '-')}.txt"
+                    data_to_save.append((current_time.isoformat(), pgv, magnitude))
+                    save_to_file(data_to_save, filename)
+                    logging.info(f"Logged magnitude {magnitude:.2f} at {current_time.isoformat()}")
+            except Exception as e:
+                logging.error(f"Error saving to file: {e}")
+                continue
+
+            try:
+                elapsed_time = current_time - start_time
+                logging.debug(f"Elapsed time: {elapsed_time}")
+                times.append(elapsed_time)
+                magnitudes.append(magnitude)
+            except Exception as e:
+                logging.error(f"Error calculating elapsed time or appending to lists: {e}")
+                continue
+
+            try:
+                plot_magnitudes(times, magnitudes)
+            except Exception as e:
+                logging.error(f"Error plotting magnitudes: {e}")
+                continue
+
+        except Exception as e:
+            logging.error(f"An unexpected error occurred: {e}")
 
 def main():
     logging.info("----------------- Process started -----------------")
@@ -98,11 +171,18 @@ def main():
     richter_threshold = 4.0
     alert_sound_path = "namazu/alerta_cdmx.mp3"
 
-    inventory_file = obspy.read_inventory(inventory_path)
-    socket = initialize_socket(pc_ip, pc_port)
+    try:
+        inventory_file = obspy.read_inventory(inventory_path)
+        sock = initialize_socket(pc_ip, pc_port)
+    except Exception as e:
+        logging.error(f"Failed to initialize socket or read inventory: {e}")
+        return
 
     logging.info("----------------- Starting real-time data processing -----------------")
-    process_data_realtime(socket, inventory_file, buffer_size_ms, richter_b, richter_threshold, alert_sound_path)
+    try:
+        process_data_realtime(sock, inventory_file, buffer_size_ms, richter_b, richter_threshold, alert_sound_path)
+    except Exception as e:
+        logging.error(f"An error occurred during real-time data processing: {e}")
 
 if __name__ == "__main__":
     main()
