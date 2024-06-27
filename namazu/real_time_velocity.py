@@ -67,7 +67,7 @@ def main():
     logging.info("----------------- Process started -----------------")
     ip = "192.168.1.73"
     port = 8888
-    inventory_path = "inventory.xml"
+    inventory_path = "namazu/inventory.xml"
     inventory = obspy.read_inventory(inventory_path)
     sock = initialize_socket(ip, port)
     buffer_size = 1000

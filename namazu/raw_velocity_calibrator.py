@@ -80,7 +80,7 @@ def process_single_data(data, counter, inventory, adjusted_start_time, local_raw
     return adjusted_start_time, local_raw_data, local_velocity_data
 
 def get_local_data(sock, duration):
-    inventory_path = "inventory.xml"
+    inventory_path = "namazu/inventory.xml"
     inventory = obspy.read_inventory(inventory_path)
     return process_data(sock, inventory, duration)
 
@@ -161,9 +161,9 @@ def main():
     logging.info("----------------- Process started ----------------- ")
     logging.info("----------------- Current configuration ----------------- ")
     station = "RECF8"
-    duration = 20
+    duration = 5
     start_time = UTCDateTime.now()
-    inventory_path = "inventory.xml"
+    inventory_path = "namazu/inventory.xml"
     ip = "192.168.1.73"
     port = 8888
     client = Client("https://data.raspberryshake.org")

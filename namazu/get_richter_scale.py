@@ -163,7 +163,7 @@ def main():
     alert_sound_path = "namazu/alerta_cdmx.mp3"
     csv_save_path = "namazu/"
     buffer_size_ms = 3000
-    richter_b = 3.0
+    richter_b = 0.0
     richter_threshold = 4.0
     pre_filt = [0.01, 0.02, 20.0, 50.0]
 
