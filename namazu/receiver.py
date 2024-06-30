@@ -8,14 +8,16 @@ def receive_message():
     data = uart.readline()
 
     if data is not None:
-        print('data is not none')
-        print(data)
-        decoded = data.decode('utf-8').strip()
-        return decoded
+        try:
+            decoded = data.decode('utf-8').strip()
+            return decoded
+        except Exception as e:
+            print(f"Failed to decode message {e} ")
+            return None
     return None
 
 while True:
-    print('Listening to messasges... ')
+    print('Listening to messages... ')
     message = receive_message()
 
     if message:
