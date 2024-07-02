@@ -17,7 +17,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 def determine_state(richter_value, state_ranges):
-    if state_ranges['state_1'][0] <= richter_value < state_ranges['state_1'][1]:
+    if state_ranges['state_0'][0] <= richter_value < state_ranges['state_0'][1]:
+        return '0'
+    elif state_ranges['state_1'][0] <= richter_value < state_ranges['state_1'][1]:
         return '1'
     elif state_ranges['state_2'][0] <= richter_value < state_ranges['state_2'][1]:
         return '2'
@@ -25,7 +27,8 @@ def determine_state(richter_value, state_ranges):
         return '3'
 
 def send_state(ser, state):
-    ser.write(state.encode())
+    message_with_newline = state + '\n'
+    ser.write(message_with_newline.encode())
 
 def remove_response_and_convert_to_velocity(trace, inventory, pre_filt):
     try:
@@ -109,16 +112,6 @@ def estimate_magnitude(pgv, b_value):
         raise
     return magnitude
 
-def trigger_alert(magnitude, threshold, alert_sound_path):
-    try:
-        if magnitude >= threshold and not pygame.mixer.music.get_busy():
-            logging.warning(f"Alert! Estimated Magnitude: {magnitude:.2f}")
-            pygame.mixer.music.load(alert_sound_path)
-            pygame.mixer.music.play()
-    except Exception as e:
-        logging.error(f"Error triggering alert: {e}")
-        raise
-
 def save_to_csv(data, filename, save_path):
     try:
         filepath = os.path.join(save_path, filename)
@@ -144,16 +137,13 @@ def process_seismic_data(buffer, inventory, start_time, pre_filt, config):
     magnitude = estimate_magnitude(pgv, config['richter_b'])
     return magnitude, trace
 
-def handle_alerts(magnitude, config):
-    trigger_alert(magnitude, config['richter_threshold'], config['alert_sound_path'])
-
 def handle_plotting(times, magnitudes):
     plot_magnitudes(times, magnitudes)
 
-def handle_state_transmission(ser, magnitude, config, last_data_time):
+def handle_state_transmission(ser, magnitude, config):
     state = determine_state(magnitude, config['state_ranges'])
     send_state(ser, state)
-    return time.time()
+    return state
 
 def process_data_realtime(sock, inventory, config):
     buffer = deque(maxlen=config['buffer_size_ms'])
@@ -167,33 +157,25 @@ def process_data_realtime(sock, inventory, config):
     if not ser:
         return
 
-    last_data_time = time.time()
-
     while True:
         try:
             seismic_readings = read_data(sock)
             update_buffer(buffer, seismic_readings)
             magnitude, trace = process_seismic_data(buffer, inventory, start_time, config['pre_filt'], config)
-            handle_alerts(magnitude, config)
 
             current_time = UTCDateTime.now()
-            if magnitude >= config['richter_threshold']:
-                if not filename:
-                    filename = f"{current_time.isoformat().replace(':', '-')}.csv"
-                data_to_save.append((current_time.isoformat(), pgv, magnitude))
-                save_to_csv(data_to_save, filename, config['csv_save_path'])
-
             elapsed_time = current_time - start_time
             logging.debug(f"Elapsed time: {elapsed_time}")
             times.append(elapsed_time)
             magnitudes.append(magnitude)
+            #handle_plotting(times, magnitudes)
 
-            handle_plotting(times, magnitudes)
-
-            last_data_time = handle_state_transmission(ser, magnitude, config, last_data_time)
-        except socket.timeout:
-            if time.time() - last_data_time > config['state_0_timeout']:
-                send_state(ser, '0')
+            state = handle_state_transmission(ser, magnitude, config)
+            if state in config['csv_states']:
+                if not filename:
+                    filename = f"{current_time.isoformat().replace(':', '-')}.csv"
+                data_to_save.append((current_time.isoformat(), pgv, magnitude))
+                save_to_csv(data_to_save, filename, config['csv_save_path'])
         except Exception as e:
             logging.error(f"An unexpected error occurred: {e}")
 
