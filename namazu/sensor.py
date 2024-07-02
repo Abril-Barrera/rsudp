@@ -11,24 +11,10 @@ import os
 import csv
 import serial
 import time
-import glob
 import yaml
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
-
-def find_usb_device():
-    ports = glob.glob('/dev/tty[A-Za-z]*')
-    result = None
-    for port in ports:
-        try:
-            s = serial.Serial(port)
-            s.close()
-            result = port
-            break
-        except (OSError, serial.SerialException):
-            pass
-    return result
 
 def determine_state(richter_value, state_ranges):
     if state_ranges['state_1'][0] <= richter_value < state_ranges['state_1'][1]:
@@ -150,11 +136,7 @@ def save_to_csv(data, filename, save_path):
         raise
 
 def setup_serial_connection(config):
-    usb_device = find_usb_device()
-    if not usb_device:
-        logging.error("No USB device found")
-        return None
-    return serial.Serial(usb_device, config['baud_rate'])
+    return serial.Serial(config['emitter_serial_port'], config['emitter_baud_rate'])
 
 def process_seismic_data(buffer, inventory, start_time, pre_filt, config):
     trace = create_and_process_trace(buffer, inventory, start_time, pre_filt, config)
@@ -210,7 +192,7 @@ def process_data_realtime(sock, inventory, config):
 
             last_data_time = handle_state_transmission(ser, magnitude, config, last_data_time)
         except socket.timeout:
-            if time.time() - last_data_time > 10:
+            if time.time() - last_data_time > config['state_0_timeout']:
                 send_state(ser, '0')
         except Exception as e:
             logging.error(f"An unexpected error occurred: {e}")
@@ -218,7 +200,7 @@ def process_data_realtime(sock, inventory, config):
 def main():
     logging.info("----------------- Process started -----------------")
 
-    with open('sensor_config.yaml', 'r') as file:
+    with open('config.yaml', 'r') as file:
         config = yaml.safe_load(file)
 
     try:

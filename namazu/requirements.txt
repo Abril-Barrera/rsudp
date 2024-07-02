@@ -1,0 +1,7 @@
+obspy
+numpy
+logging
+matplotlib
+pygame
+pyserial
+pyyaml

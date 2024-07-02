@@ -11,9 +11,11 @@ state_ranges:
   state_1: [0, 3.0]
   state_2: [3.0, 4.0]
   state_3: [4.0, 10.0]
+state_0_timeout: 10
 network: "AM"
 station: "RECF8"
 location: "00"
 channel: "EHZ"
 sampling_rate: 100.0
-baud_rate: 9600
+emitter_baud_rate: 9600
+emitter_serial_port: "/dev/ttyUSB0"
