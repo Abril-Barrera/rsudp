@@ -1,0 +1,19 @@
+pc_ip: "192.168.1.73"
+pc_port: 8888
+inventory_path: "namazu/inventory.xml"
+alert_sound_path: "namazu/alerta_cdmx.mp3"
+csv_save_path: "namazu/"
+buffer_size_ms: 3000
+richter_b: 0.0
+richter_threshold: 4.0
+pre_filt: [0.01, 0.02, 20.0, 50.0]
+state_ranges:
+  state_1: [0, 3.0]
+  state_2: [3.0, 4.0]
+  state_3: [4.0, 10.0]
+network: "AM"
+station: "RECF8"
+location: "00"
+channel: "EHZ"
+sampling_rate: 100.0
+baud_rate: 9600
