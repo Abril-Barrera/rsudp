@@ -1,7 +1,7 @@
-pc_ip: "192.168.1.73"
+pc_ip: "192.168.1.108"
 pc_port: 8888
-inventory_path: "namazu/inventory.xml"
-csv_save_path: "namazu/"
+inventory_path: "/opt/settings/config/inventory.xml"
+csv_save_path: "/"
 csv_states: ['2', '3']
 buffer_size_ms: 3000
 richter_b: 0.0
@@ -13,9 +13,9 @@ state_ranges:
   state_2: [4.0, 5.0]
   state_3: [5.0, 10.0]
 network: "AM"
-station: "RECF8"
+station: "R8C49"
 location: "00"
 channel: "EHZ"
 sampling_rate: 100.0
 emitter_baud_rate: 9600
-emitter_serial_port: "/dev/ttyUSB0"
+emitter_serial_port: "/dev/ttyACM0"

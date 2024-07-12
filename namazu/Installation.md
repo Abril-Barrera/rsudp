@@ -15,3 +15,11 @@ Receiver
 1. Install libraries manually
 2. Upload MP3 files
 3. Add receiver.py as a service system
+
+
+
+sudo apt install -y build-essential gfortran libatlas-base-dev
+
+
+dmesg | grep -i "out of memory"
+dmesg | grep -i "killed process"
