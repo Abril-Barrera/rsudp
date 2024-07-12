@@ -16,10 +16,12 @@ Receiver
 2. Upload MP3 files
 3. Add receiver.py as a service system
 
-
+obspy, pygame, pyserial, pyyaml
 
 sudo apt install -y build-essential gfortran libatlas-base-dev
-
+sudo apt-get install -y libxml2-dev libxslt-dev
+sudo apt-get install -y libjpeg-dev libtiff-dev zlib1g-dev
+sudo apt-get install -y libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev
 
 dmesg | grep -i "out of memory"
 dmesg | grep -i "killed process"

@@ -1,7 +1,7 @@
 pc_ip: "192.168.1.108"
 pc_port: 8888
-inventory_path: "/opt/settings/config/inventory.xml"
-csv_save_path: "/"
+inventory_path: "/namazu/inventory.xml"
+csv_save_path: "/namazu/"
 csv_states: ['2', '3']
 buffer_size_ms: 3000
 richter_b: 0.0

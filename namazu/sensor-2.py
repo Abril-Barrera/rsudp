@@ -100,7 +100,6 @@ def create_and_process_trace(buffer, inventory, start_time, pre_filt, config):
             raise
     except Exception as e:
         logging.error(f"Error creating and processing trace: {e}")
-        raise
     return trace
 
 def plot_magnitudes(times, magnitudes):
@@ -115,13 +114,14 @@ def plot_magnitudes(times, magnitudes):
     except Exception as e:
         logging.error(f"Error plotting magnitudes: {e}")
         raise
-
+def handle_plotting(times, magnitudes):
+    plot_magnitudes(times, magnitudes)
+    
 def calculate_pgv(velocity_data):
     try:
         pgv = np.max(np.abs(velocity_data))
     except Exception as e:
         logging.error(f"Error calculating PGV: {e}")
-        raise
     return pgv
 
 def estimate_magnitude(pgv, b_value):
@@ -130,7 +130,6 @@ def estimate_magnitude(pgv, b_value):
         magnitude = np.log10(pgv_cm_s) + b_value
     except Exception as e:
         logging.error(f"Error estimating magnitude: {e}")
-        raise
     return magnitude
 
 def save_to_csv(data, filename, save_path):
@@ -144,7 +143,7 @@ def save_to_csv(data, filename, save_path):
             writer.writerow(["Timestamp", "Velocity", "Richter Scale"])
             for row in data:
                 writer.writerow(row)
-        logging.info(f"Estimated Richter Scale Magnitude: {magnitudes[-1]:.2f}")
+        logging.info(f"-: Estimated Richter Scale Magnitude to be saved in CSV: {magnitudes[-1]:.2f}")
     except Exception as e:
         logging.error(f"Error saving to CSV: {e}")
         raise
@@ -156,26 +155,59 @@ def setup_serial_connection(config):
         logging.error(f"Error setting up serial connection: {e}")
     return ser
 
-def process_seismic_data(buffer, inventory, start_time, pre_filt, config):
-    try: 
-        trace = create_and_process_trace(buffer, inventory, start_time, pre_filt, config)
-        pgv = calculate_pgv(trace.data)
-        magnitude = estimate_magnitude(pgv, config['richter_b'])
-        return trace, pgv, magnitude
-    except Exception as e:
-        logging.error(f"Failed to process seismic_data: {e}")
-
-def handle_plotting(times, magnitudes):
-    plot_magnitudes(times, magnitudes)
-
-def handle_state_transmission(ser, magnitude, config):
+def read_and_update_data(sock, buffer):
     try:
+        seismic_readings = read_data(sock)
+        update_buffer(buffer, seismic_readings)
+    except Exception as e:
+        logging.error(f"Error reading and updating data: {e}")
+
+def process_seismic_data(buffer, inventory, start_time, pre_filt, config):
+    try:
+        trace = create_and_process_trace(buffer, inventory, start_time, pre_filt, config)
+        if trace is None:
+            return None, None, None
+        pgv = calculate_pgv(trace.data)
+        if pgv is None:
+            return None, None, None
+        magnitude = estimate_magnitude(pgv, config['richter_b'])
+        if magnitude is None:
+            return None, None, None
+        return magnitude, trace, pgv
+    except Exception as e:
+        logging.error(f"Failed to process seismic data: {e}")
+
+def process_seismic_data_buffer(buffer, inventory, start_time, config):
+    try:
+        magnitude, trace, pgv = process_seismic_data(buffer, inventory, start_time, config['pre_filt'], config)
+        if trace is None:
+            return None, None, None
+        #print("-: Trace info:", trace)
+        print("-: Estimated richter magnitude:", magnitude)
+        return magnitude, trace, pgv
+    except Exception as e:
+        logging.error(f"Error processing seismic data buffer: {e}")
+        return None, None, None
+    
+def handle_state_transmission(ser, magnitude, config):
+    try: 
         state = determine_state(magnitude, config['state_ranges'])
         send_state(ser, state)
         return state
     except Exception as e:
         logging.error(f"Failed to handle state transmission: {e}")
 
+def handle_state_and_csv(ser, magnitude, config, data_to_save, pgv, save_path):
+    try:
+        state = handle_state_transmission(ser, magnitude, config)
+        #logging.info(f"-: Current state: {state}")
+        if state in config['csv_states']:
+            filename = f"{UTCDateTime.now().isoformat().replace(':', '-')}.csv"
+            data_to_save.append((UTCDateTime.now().isoformat(), pgv, magnitude))
+            print(f"Saving to CSV: {data_to_save[-1]}")  # Debug statement
+            save_to_csv(data_to_save, filename, save_path)
+    except Exception as e:
+        logging.error(f"Error handling state and CSV: {e}")
 
 def process_data_realtime(sock, inventory, config):
     buffer = deque(maxlen=config['buffer_size_ms'])
@@ -185,42 +217,38 @@ def process_data_realtime(sock, inventory, config):
     pygame.init()
     data_to_save = []
     ser = setup_serial_connection(config)
-    if ser:
-        logging.info(f"-: Serial connection set succesfully {ser}")
+    if not ser:
+        return
 
     while True:
         try:
-            logging.info(f"-: STARTING CYCLE ")
-            seismic_readings = read_data(sock)
-            update_buffer(buffer, seismic_readings)
-            trace, pgv, magnitude = process_seismic_data(buffer, inventory, start_time, config['pre_filt'], config)
-            logging.info(f"-: Got trace pgv and magnitude")
-            logging.info(f"-: Estimated magnitude {magnitude}")
+            read_and_update_data(sock, buffer)
+            magnitude, trace, pgv = process_seismic_data_buffer(buffer, inventory, start_time, config)
+            if trace is None:
+                continue
+
             current_time = UTCDateTime.now()
             elapsed_time = current_time - start_time
             logging.debug(f"Elapsed time: {elapsed_time}")
             times.append(elapsed_time)
             magnitudes.append(magnitude)
-            logging.info(f"-: Appended times succesfully")
-            #handle_plotting(times, magnitudes)
+            handle_plotting(times, magnitudes)
 
-            state = handle_state_transmission(ser, magnitude, config)
-            logging.info(f"-: Handled state transmition")
-            if state in config['csv_states']:
-                logging.info(f"-: This shouldmnt appear")
-                filename = f"{current_time.isoformat().replace(':', '-')}.csv"
-                data_to_save.append((current_time.isoformat(), pgv, magnitude))
-                save_to_csv(data_to_save, filename, config['csv_save_path'])
-
-            logging.info(f"-: lAST ONE")
+            handle_state_and_csv(ser, magnitude, config, data_to_save, pgv, config['csv_save_path'])
         except Exception as e:
-            logging.error(f"An unexpected error occurred: {e}")
+            logging.error(f"Failed to process data within main function: {e}")
+            return
 
 def main():
     logging.info("----------------- Process started -----------------")
-
-    with open('sensor_config.yaml', 'r') as file:
-        config = yaml.safe_load(file)
+    
+    try:
+        config_path = resource_path('sensor_config.yaml')
+        with open(config_path, 'r') as file:
+            config = yaml.safe_load(file)
+    except Exception as e:
+        logging.error(f"Failed to read config file: {e}")
+        return
 
     try:
         inventory_file = obspy.read_inventory(config['inventory_path'])
