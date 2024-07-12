@@ -18,6 +18,9 @@ Receiver
 
 obspy, pygame, pyserial, pyyaml
 
+make sure serial is enabled: sudo usermod -a -G dialout $USER
+
+
 sudo apt install -y build-essential gfortran libatlas-base-dev
 sudo apt-get install -y libxml2-dev libxslt-dev
 sudo apt-get install -y libjpeg-dev libtiff-dev zlib1g-dev

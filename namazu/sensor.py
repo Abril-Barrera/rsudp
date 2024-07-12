@@ -29,8 +29,7 @@ def resource_path(relative_path):
 
 def determine_state(richter_value, state_ranges):
     try: 
-        logging.info(f"Determing state")
-
+        logging.info(f"Determining state")
         if richter_value < state_ranges['state_0'][1]:
             return '0'
         elif state_ranges['state_1'][0] <= richter_value < state_ranges['state_1'][1]:
@@ -42,17 +41,17 @@ def determine_state(richter_value, state_ranges):
         else:
             logging.error(f"State is not within correct range.")
     except Exception as e:
-        logging.error(f"Failed to determine state.")
+        logging.error(f"Failed to determine state: {e}")
 
 def send_state(ser, state):
     try:
         logging.info(f"Sending state")
         message_with_newline = state + '\n'
-        logging.info(f"Writting state")
-        ser.write(message_with_newline.encode())
-        logging.info(f"Done wrritting state")
+        ser.timeout = 2  # Set timeout for the write operation
+        bytes_written = ser.write(message_with_newline.encode())
+        logging.info(f"Written {bytes_written} bytes to serial port")
     except Exception as e:
-        logging.error(f"Failed to send state.")
+        logging.error(f"Failed to send state: {e}")
 
 def remove_response_and_convert_to_velocity(trace, inventory, pre_filt):
     try:
@@ -176,13 +175,11 @@ def handle_plotting(times, magnitudes):
 def handle_state_transmission(ser, magnitude, config):
     try:
         logging.info(f"Handling state transmission")
-
         state = determine_state(magnitude, config['state_ranges'])
         send_state(ser, state)
         return state
     except Exception as e:
         logging.error(f"Failed to handle state transmission: {e}")
-
 
 def process_data_realtime(sock, inventory, config):
     buffer = deque(maxlen=config['buffer_size_ms'])
@@ -193,11 +190,11 @@ def process_data_realtime(sock, inventory, config):
     data_to_save = []
     ser = setup_serial_connection(config)
     if ser:
-        logging.info(f"-: Serial connection set succesfully {ser}")
+        logging.info(f"-: Serial connection set successfully {ser}")
 
     while True:
         try:
-            logging.info(f"-: STARTING CYCLE ")
+            logging.info(f"-: STARTING CYCLE")
             seismic_readings = read_data(sock)
             update_buffer(buffer, seismic_readings)
             trace, pgv, magnitude = process_seismic_data(buffer, inventory, start_time, config['pre_filt'], config)
@@ -208,18 +205,18 @@ def process_data_realtime(sock, inventory, config):
             logging.debug(f"Elapsed time: {elapsed_time}")
             times.append(elapsed_time)
             magnitudes.append(magnitude)
-            logging.info(f"-: Appended times succesfully")
+            logging.info(f"-: Appended times successfully")
             #handle_plotting(times, magnitudes)
 
             state = handle_state_transmission(ser, magnitude, config)
-            logging.info(f"-: Handled state transmition")
+            logging.info(f"-: Handled state transmission")
             if state in config['csv_states']:
-                logging.info(f"-: This shouldmnt appear")
+                logging.info(f"-: This shouldn't appear")
                 filename = f"{current_time.isoformat().replace(':', '-')}.csv"
                 data_to_save.append((current_time.isoformat(), pgv, magnitude))
                 save_to_csv(data_to_save, filename, config['csv_save_path'])
 
-            logging.info(f"-: lAST ONE")
+            logging.info(f"-: LAST ONE")
         except Exception as e:
             logging.error(f"An unexpected error occurred: {e}")
 
