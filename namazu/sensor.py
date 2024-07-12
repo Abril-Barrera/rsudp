@@ -29,6 +29,8 @@ def resource_path(relative_path):
 
 def determine_state(richter_value, state_ranges):
     try: 
+        logging.info(f"Determing state")
+
         if richter_value < state_ranges['state_0'][1]:
             return '0'
         elif state_ranges['state_1'][0] <= richter_value < state_ranges['state_1'][1]:
@@ -44,8 +46,11 @@ def determine_state(richter_value, state_ranges):
 
 def send_state(ser, state):
     try:
+        logging.info(f"Sending state")
         message_with_newline = state + '\n'
+        logging.info(f"Writting state")
         ser.write(message_with_newline.encode())
+        logging.info(f"Done wrritting state")
     except Exception as e:
         logging.error(f"Failed to send state.")
 
@@ -170,6 +175,8 @@ def handle_plotting(times, magnitudes):
 
 def handle_state_transmission(ser, magnitude, config):
     try:
+        logging.info(f"Handling state transmission")
+
         state = determine_state(magnitude, config['state_ranges'])
         send_state(ser, state)
         return state
