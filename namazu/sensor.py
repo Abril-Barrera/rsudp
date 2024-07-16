@@ -1,6 +1,4 @@
 import os
-os.environ['SDL_AUDIODRIVER'] = 'dummy'
-
 import socket
 import obspy
 import numpy as np
@@ -17,7 +15,7 @@ import sys
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
-logging.getLogger('pygame').setLevel(logging.WARNING)
+os.environ['SDL_AUDIODRIVER'] = 'dummy'
 
 def resource_path(relative_path):
     try:
@@ -29,7 +27,6 @@ def resource_path(relative_path):
 
 def determine_state(richter_value, state_ranges):
     try: 
-        logging.info(f"Determining state")
         if richter_value < state_ranges['state_0'][1]:
             return '0'
         elif state_ranges['state_1'][0] <= richter_value < state_ranges['state_1'][1]:
@@ -45,11 +42,12 @@ def determine_state(richter_value, state_ranges):
 
 def send_state(ser, state):
     try:
-        logging.info(f"Sending state")
         message_with_newline = state + '\n'
-        ser.timeout = 2  # Set timeout for the write operation
+        ser.timeout = 2
         bytes_written = ser.write(message_with_newline.encode())
-        logging.info(f"Written {bytes_written} bytes to serial port")
+        #logging.info(f"Written {bytes_written} bytes to serial port")
+        response = ser.read(100)
+        #logging.info(f"Response from serial device: {response}")
     except Exception as e:
         logging.error(f"Failed to send state: {e}")
 
@@ -148,7 +146,6 @@ def save_to_csv(data, filename, save_path):
             writer.writerow(["Timestamp", "Velocity", "Richter Scale"])
             for row in data:
                 writer.writerow(row)
-        logging.info(f"Estimated Richter Scale Magnitude: {magnitudes[-1]:.2f}")
     except Exception as e:
         logging.error(f"Error saving to CSV: {e}")
         raise
@@ -174,7 +171,6 @@ def handle_plotting(times, magnitudes):
 
 def handle_state_transmission(ser, magnitude, config):
     try:
-        logging.info(f"Handling state transmission")
         state = determine_state(magnitude, config['state_ranges'])
         send_state(ser, state)
         return state
@@ -194,29 +190,23 @@ def process_data_realtime(sock, inventory, config):
 
     while True:
         try:
-            logging.info(f"-: STARTING CYCLE")
             seismic_readings = read_data(sock)
             update_buffer(buffer, seismic_readings)
             trace, pgv, magnitude = process_seismic_data(buffer, inventory, start_time, config['pre_filt'], config)
-            logging.info(f"-: Got trace pgv and magnitude")
-            logging.info(f"-: Estimated magnitude {magnitude}")
+            logging.info(f"Estimated Richter Magnitude {magnitude}")
             current_time = UTCDateTime.now()
             elapsed_time = current_time - start_time
             logging.debug(f"Elapsed time: {elapsed_time}")
             times.append(elapsed_time)
             magnitudes.append(magnitude)
-            logging.info(f"-: Appended times successfully")
             #handle_plotting(times, magnitudes)
 
             state = handle_state_transmission(ser, magnitude, config)
-            logging.info(f"-: Handled state transmission")
             if state in config['csv_states']:
-                logging.info(f"-: This shouldn't appear")
                 filename = f"{current_time.isoformat().replace(':', '-')}.csv"
                 data_to_save.append((current_time.isoformat(), pgv, magnitude))
                 save_to_csv(data_to_save, filename, config['csv_save_path'])
 
-            logging.info(f"-: LAST ONE")
         except Exception as e:
             logging.error(f"An unexpected error occurred: {e}")
 
