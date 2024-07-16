@@ -47,8 +47,8 @@ def send_state(ser, state):
         bytes_written = ser.write(message_with_newline.encode())
         logging.debug(f"Written {bytes_written} bytes to serial port: {message_with_newline}")
         # Read with a timeout to avoid blocking
-        #response = ser.read(100)
-        #logging.debug(f"Response from serial device: {response}")
+        response = ser.read(100)
+        logging.debug(f"Response from serial device: {response}")
     except serial.SerialTimeoutException:
         logging.error("Serial write operation timed out")
     except Exception as e:
