@@ -43,11 +43,14 @@ def determine_state(richter_value, state_ranges):
 def send_state(ser, state):
     try:
         message_with_newline = state + '\n'
-        ser.timeout = 2
+        ser.write_timeout = 2
         bytes_written = ser.write(message_with_newline.encode())
-        #logging.info(f"Written {bytes_written} bytes to serial port")
-        response = ser.read(100)
-        #logging.info(f"Response from serial device: {response}")
+        logging.debug(f"Written {bytes_written} bytes to serial port: {message_with_newline}")
+        # Read with a timeout to avoid blocking
+        #response = ser.read(100)
+        #logging.debug(f"Response from serial device: {response}")
+    except serial.SerialTimeoutException:
+        logging.error("Serial write operation timed out")
     except Exception as e:
         logging.error(f"Failed to send state: {e}")
 
@@ -63,6 +66,7 @@ def remove_response_and_convert_to_velocity(trace, inventory, pre_filt):
 def initialize_socket(ip, port):
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(5.0)  # Set a timeout for the socket operations
         sock.bind((ip, port))
         logging.info(f"Listening for data on {ip}:{port}")
     except Exception as e:
@@ -76,6 +80,9 @@ def read_data(sock):
         data_str = data.decode('utf-8').replace('{', '[').replace('}', ']')
         parsed_data = ast.literal_eval(data_str)
         seismic_readings = parsed_data[2:]
+    except socket.timeout:
+        logging.warning("Socket timeout occurred, no data received")
+        return None
     except Exception as e:
         logging.error(f"Error reading data: {e}")
         raise
@@ -152,9 +159,10 @@ def save_to_csv(data, filename, save_path):
 
 def setup_serial_connection(config):
     try:
-        ser = serial.Serial(config['emitter_serial_port'], config['emitter_baud_rate'])
+        ser = serial.Serial(config['emitter_serial_port'], config['emitter_baud_rate'], timeout=5)
     except Exception as e:
         logging.error(f"Error setting up serial connection: {e}")
+        raise
     return ser
 
 def process_seismic_data(buffer, inventory, start_time, pre_filt, config):
@@ -191,6 +199,8 @@ def process_data_realtime(sock, inventory, config):
     while True:
         try:
             seismic_readings = read_data(sock)
+            if seismic_readings is None:
+                continue  # Skip processing if no data was received
             update_buffer(buffer, seismic_readings)
             trace, pgv, magnitude = process_seismic_data(buffer, inventory, start_time, config['pre_filt'], config)
             logging.info(f"Estimated Richter Magnitude {magnitude}")
