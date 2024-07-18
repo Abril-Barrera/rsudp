@@ -43,7 +43,7 @@ while True:
         print('Received: ', message)
 
         if message == '2':
-            play_sound('state2.wav')
+            play_sound('state3.wav')
         elif message == '3':
             play_sound('state3.wav')
         

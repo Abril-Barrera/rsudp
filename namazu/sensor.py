@@ -9,13 +9,37 @@ from obspy import UTCDateTime
 from collections import deque
 import pygame
 import csv
-import serial
 import yaml
 import sys
+import time
+import pigpio
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 os.environ['SDL_AUDIODRIVER'] = 'dummy'
+
+def setup_simulated_uart(tx_uart):
+    try: 
+        pi = pigpio.pi()
+        if not pi.connected:
+            exit()
+
+        pi.set_mode(tx_uart, pigpio.OUTPUT)
+        return pi
+    except Exception as e:
+        logging.error(f"Failed to setup simulated uart: {e}")
+
+def send_uart_data(pi, tx_uart, data, baud_rate):
+    try: 
+        pi.wave_clear()
+        pi.wave_add_serial(tx_uart, baud_rate, data)
+        wave_id = pi.wave_create()
+        pi.wave_send_once(wave_id)
+        while pi.wave_tx_busy():
+            time.sleep(0.01)
+        pi.wave_delete(wave_id)
+    except Exception as e:
+        logging.error(f"Failed to transmit state through anthena TX: {e}")
 
 def resource_path(relative_path):
     try:
@@ -40,17 +64,10 @@ def determine_state(richter_value, state_ranges):
     except Exception as e:
         logging.error(f"Failed to determine state: {e}")
 
-def send_state(ser, state):
+def send_state(pi, state, tx_uart, baud_rate):
     try:
-        message_with_newline = state + '\n'
-        ser.write_timeout = 2
-        bytes_written = ser.write(message_with_newline.encode())
-        logging.debug(f"Written {bytes_written} bytes to serial port: {message_with_newline}")
-        # Read with a timeout to avoid blocking
-        response = ser.read(100)
-        logging.debug(f"Response from serial device: {response}")
-    except serial.SerialTimeoutException:
-        logging.error("Serial write operation timed out")
+        send_uart_data(pi, tx_uart, state.encode(), baud_rate)
+        logging.debug(f"Sent state to simulated UART: {state}")
     except Exception as e:
         logging.error(f"Failed to send state: {e}")
 
@@ -66,7 +83,7 @@ def remove_response_and_convert_to_velocity(trace, inventory, pre_filt):
 def initialize_socket(ip, port):
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(5.0)  # Set a timeout for the socket operations
+        sock.settimeout(5.0)
         sock.bind((ip, port))
         logging.info(f"Listening for data on {ip}:{port}")
     except Exception as e:
@@ -157,14 +174,6 @@ def save_to_csv(data, filename, save_path):
         logging.error(f"Error saving to CSV: {e}")
         raise
 
-def setup_serial_connection(config):
-    try:
-        ser = serial.Serial(config['emitter_serial_port'], config['emitter_baud_rate'], timeout=5)
-    except Exception as e:
-        logging.error(f"Error setting up serial connection: {e}")
-        raise
-    return ser
-
 def process_seismic_data(buffer, inventory, start_time, pre_filt, config):
     try: 
         trace = create_and_process_trace(buffer, inventory, start_time, pre_filt, config)
@@ -177,10 +186,10 @@ def process_seismic_data(buffer, inventory, start_time, pre_filt, config):
 def handle_plotting(times, magnitudes):
     plot_magnitudes(times, magnitudes)
 
-def handle_state_transmission(ser, magnitude, config):
+def handle_state_transmission(pi, magnitude, config):
     try:
         state = determine_state(magnitude, config['state_ranges'])
-        send_state(ser, state)
+        send_state(pi, state, config['tx_gpio_pin'], config['baud_rate'])
         return state
     except Exception as e:
         logging.error(f"Failed to handle state transmission: {e}")
@@ -192,15 +201,17 @@ def process_data_realtime(sock, inventory, config):
     start_time = UTCDateTime.now()
     pygame.init()
     data_to_save = []
-    ser = setup_serial_connection(config)
-    if ser:
-        logging.info(f"-: Serial connection set successfully {ser}")
+
+    pi = setup_simulated_uart(config['tx_gpio_pin'])
+
+    if pi:
+        logging.info(f"-: Connection to anthena through TX was set successfully {pi}")
 
     while True:
         try:
             seismic_readings = read_data(sock)
             if seismic_readings is None:
-                continue  # Skip processing if no data was received
+                continue
             update_buffer(buffer, seismic_readings)
             trace, pgv, magnitude = process_seismic_data(buffer, inventory, start_time, config['pre_filt'], config)
             logging.info(f"Estimated Richter Magnitude {magnitude}")
@@ -211,7 +222,7 @@ def process_data_realtime(sock, inventory, config):
             magnitudes.append(magnitude)
             #handle_plotting(times, magnitudes)
 
-            state = handle_state_transmission(ser, magnitude, config)
+            state = handle_state_transmission(pi, magnitude, config)
             if state in config['csv_states']:
                 filename = f"{current_time.isoformat().replace(':', '-')}.csv"
                 data_to_save.append((current_time.isoformat(), pgv, magnitude))
@@ -219,7 +230,7 @@ def process_data_realtime(sock, inventory, config):
 
         except Exception as e:
             logging.error(f"An unexpected error occurred: {e}")
-
+    
 def main():
     logging.info("----------------- Process started -----------------")
 
