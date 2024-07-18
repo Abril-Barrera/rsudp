@@ -17,5 +17,7 @@ station: "R8C49"
 location: "00"
 channel: "EHZ"
 sampling_rate: 100.0
+emitter_baud_rate: 9600
+emitter_serial_port: "/dev/ttyACM0"
 tx_gpio_pin: 26
 baud_rate: 9600
