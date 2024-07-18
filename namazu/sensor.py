@@ -194,7 +194,7 @@ def handle_state_transmission(pi, magnitude, config):
     except Exception as e:
         logging.error(f"Failed to handle state transmission: {e}")
 
-def process_data_realtime(sock, inventory, config):
+def process_data_realtime(socket, inventory, config):
     buffer = deque(maxlen=config['buffer_size_ms'])
     magnitudes = deque(maxlen=config['buffer_size_ms'])
     times = deque(maxlen=config['buffer_size_ms'])
@@ -209,7 +209,7 @@ def process_data_realtime(sock, inventory, config):
 
     while True:
         try:
-            seismic_readings = read_data(sock)
+            seismic_readings = read_data(socket)
             if seismic_readings is None:
                 continue
             update_buffer(buffer, seismic_readings)
@@ -239,14 +239,14 @@ def main():
 
     try:
         inventory_file = obspy.read_inventory(config['inventory_path'])
-        sock = initialize_socket(config['pc_ip'], config['pc_port'])
+        socket = initialize_socket(config['pc_ip'], config['pc_port'])
     except Exception as e:
         logging.error(f"Failed to initialize socket or read inventory: {e}")
         return
 
     logging.info("----------------- Starting real-time data processing -----------------")
     try:
-        process_data_realtime(sock, inventory_file, config)
+        process_data_realtime(socket, inventory_file, config)
     except Exception as e:
         logging.error(f"An error occurred during real-time data processing: {e}")
 
