@@ -1,4 +1,4 @@
-pc_ip: "192.168.1.108"
+pc_ip: "192.168.1.101"
 pc_port: 8888
 inventory_path: "/namazu/inventory.xml"
 csv_save_path: "/namazu/"
@@ -17,7 +17,5 @@ station: "R8C49"
 location: "00"
 channel: "EHZ"
 sampling_rate: 100.0
-emitter_baud_rate: 9600
-emitter_serial_port: "/dev/ttyACM0"
-tx_gpio_pin: 26
+tx_uart: "/dev/ttyACM0"
 baud_rate: 9600

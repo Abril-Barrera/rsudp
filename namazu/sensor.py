@@ -12,34 +12,26 @@ import csv
 import yaml
 import sys
 import time
-import pigpio
+import serial
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 os.environ['SDL_AUDIODRIVER'] = 'dummy'
 
-def setup_simulated_uart(tx_uart):
-    try: 
-        pi = pigpio.pi()
-        if not pi.connected:
-            exit()
-
-        pi.set_mode(tx_uart, pigpio.OUTPUT)
-        return pi
+def setup_uart(tx_uart, baud_rate):
+    try:
+        uart = serial.Serial(tx_uart, baud_rate, timeout=1)
+        return uart
     except Exception as e:
-        logging.error(f"Failed to setup simulated uart: {e}")
+        logging.error(f"Failed to setup UART: {e}")
+        return None
 
-def send_uart_data(pi, tx_uart, data, baud_rate):
-    try: 
-        pi.wave_clear()
-        pi.wave_add_serial(tx_uart, baud_rate, data)
-        wave_id = pi.wave_create()
-        pi.wave_send_once(wave_id)
-        while pi.wave_tx_busy():
-            time.sleep(0.01)
-        pi.wave_delete(wave_id)
+def send_uart_data(uart, data):
+    try:
+        uart.write(data)
+        uart.flush()
     except Exception as e:
-        logging.error(f"Failed to transmit state through anthena TX: {e}")
+        logging.error(f"Failed to transmit state through antenna TX: {e}")
 
 def resource_path(relative_path):
     try:
@@ -60,14 +52,14 @@ def determine_state(richter_value, state_ranges):
         elif state_ranges['state_3'][0] <= richter_value <= state_ranges['state_3'][1]:
             return '3'
         else:
-            logging.error(f"State is not within correct range.")
+            logging.error(f"State is not within the correct range.")
     except Exception as e:
         logging.error(f"Failed to determine state: {e}")
 
-def send_state(pi, state, tx_uart, baud_rate):
+def send_state(uart, state):
     try:
-        send_uart_data(pi, tx_uart, state.encode(), baud_rate)
-        logging.debug(f"Sent state to simulated UART: {state}")
+        send_uart_data(uart, state.encode())
+        logging.debug(f"Sent state to UART: {state}")
     except Exception as e:
         logging.error(f"Failed to send state: {e}")
 
@@ -186,10 +178,10 @@ def process_seismic_data(buffer, inventory, start_time, pre_filt, config):
 def handle_plotting(times, magnitudes):
     plot_magnitudes(times, magnitudes)
 
-def handle_state_transmission(pi, magnitude, config):
+def handle_state_transmission(uart, magnitude, config):
     try:
         state = determine_state(magnitude, config['state_ranges'])
-        send_state(pi, state, config['tx_gpio_pin'], config['baud_rate'])
+        send_state(uart, state)
         return state
     except Exception as e:
         logging.error(f"Failed to handle state transmission: {e}")
@@ -202,10 +194,10 @@ def process_data_realtime(socket, inventory, config):
     pygame.init()
     data_to_save = []
 
-    pi = setup_simulated_uart(config['tx_gpio_pin'])
+    uart = setup_uart(config['tx_uart'], config['baud_rate'])
 
-    if pi:
-        logging.info(f"-: Connection to anthena through TX was set successfully {pi}")
+    if uart:
+        logging.info(f"-: Connection to antenna through TX was set successfully {uart.port}")
 
     while True:
         try:
@@ -222,7 +214,7 @@ def process_data_realtime(socket, inventory, config):
             magnitudes.append(magnitude)
             #handle_plotting(times, magnitudes)
 
-            state = handle_state_transmission(pi, magnitude, config)
+            state = handle_state_transmission(uart, magnitude, config)
             if state in config['csv_states']:
                 filename = f"{current_time.isoformat().replace(':', '-')}.csv"
                 data_to_save.append((current_time.isoformat(), pgv, magnitude))

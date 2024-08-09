@@ -1,31 +1,25 @@
-import pigpio
+import serial
 import time
 
-TX_PIN = 26  # GPIO pin for TX
+UART_DEVICE = "/dev/ttyACM0"
+BAUD_RATE = 9600
 
-# Initialize pigpio
-pi = pigpio.pi()
-print("sender.py")
-
-if not pi.connected:
+try:
+    uart = serial.Serial(UART_DEVICE, BAUD_RATE, timeout=1)
+    print("UART connection established.")
+except Exception as e:
+    print(f"Failed to establish UART connection: {e}")
     exit()
 
-pi.set_mode(TX_PIN, pigpio.OUTPUT)
-baud = 9600
+def send_uart_data(uart, data):
+    try:
+        uart.write(data)
+        uart.flush()
+        print("Data sent.")
+    except Exception as e:
+        print(f"Failed to send data over UART: {e}")
 
-# Function to send data using bit-banging
-def send_uart_data(pi, tx_pin, data, baud):
-    pi.wave_clear()
-    pi.wave_add_serial(tx_pin, baud, data)
-    wave_id = pi.wave_create()
-    pi.wave_send_once(wave_id)
-    while pi.wave_tx_busy():
-        time.sleep(0.01)  # Wait for the transmission to complete
-    pi.wave_delete(wave_id)
+send_uart_data(uart, b"hi")
+print("Sent data: 'hi'")
 
-# Send "hi" to the antenna
-send_uart_data(pi, TX_PIN, b"hi", baud)
-print("sent data")
-
-# Stop pigpio
-pi.stop()
+uart.close()
