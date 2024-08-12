@@ -18,9 +18,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 os.environ['SDL_AUDIODRIVER'] = 'dummy'
 
-def setup_uart(tx_uart, baud_rate):
+def setup_uart(uart_device, baud_rate):
     try:
-        uart = serial.Serial(tx_uart, baud_rate, timeout=1)
+        uart = serial.Serial(uart_device, baud_rate, timeout=1)
         return uart
     except Exception as e:
         logging.error(f"Failed to setup UART: {e}")
@@ -28,6 +28,7 @@ def setup_uart(tx_uart, baud_rate):
 
 def send_uart_data(uart, data):
     try:
+        print(' Sending: ', data)
         uart.write(data)
         uart.flush()
     except Exception as e:
@@ -58,6 +59,7 @@ def determine_state(richter_value, state_ranges):
 
 def send_state(uart, state):
     try:
+        print(' Sending raw: ', state)
         send_uart_data(uart, state.encode())
         logging.debug(f"Sent state to UART: {state}")
     except Exception as e:
@@ -194,7 +196,7 @@ def process_data_realtime(socket, inventory, config):
     pygame.init()
     data_to_save = []
 
-    uart = setup_uart(config['tx_uart'], config['baud_rate'])
+    uart = setup_uart(config['uart_device'], config['baud_rate'])
 
     if uart:
         logging.info(f"-: HC-12 Antenna connection was set successfully {uart.port}")

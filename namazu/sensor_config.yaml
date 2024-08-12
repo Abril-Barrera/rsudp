@@ -17,5 +17,5 @@ station: "R8C49"
 location: "00"
 channel: "EHZ"
 sampling_rate: 100.0
-tx_uart: "/dev/ttyS0"
+uart_device: "/dev/ttyS0"
 baud_rate: 9600
