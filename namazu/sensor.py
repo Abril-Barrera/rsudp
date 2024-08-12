@@ -197,7 +197,7 @@ def process_data_realtime(socket, inventory, config):
     uart = setup_uart(config['tx_uart'], config['baud_rate'])
 
     if uart:
-        logging.info(f"-: Connection to antenna through TX was set successfully {uart.port}")
+        logging.info(f"-: HC-12 Antenna connection was set successfully {uart.port}")
 
     while True:
         try:

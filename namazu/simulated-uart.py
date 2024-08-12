@@ -1,7 +1,7 @@
 import serial
 import time
 
-UART_DEVICE = "/dev/ttyACM0"
+UART_DEVICE = "/dev/ttyS0"
 BAUD_RATE = 9600
 
 try:
@@ -19,7 +19,8 @@ def send_uart_data(uart, data):
     except Exception as e:
         print(f"Failed to send data over UART: {e}")
 
-send_uart_data(uart, b"hi")
-print("Sent data: 'hi'")
+send_uart_data(uart, b"Antennas are working")
+time.sleep(0.1) 
+print("Sent data: 'A'")
 
 uart.close()
